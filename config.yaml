@@ -1,0 +1,32 @@
+# CNET Agent Configuration
+
+agent:
+  address: "0.0.0.0"
+  port: 8080
+  node_id: ""  # Will be auto-generated if empty
+  node_name: ""  # Will use hostname if empty
+  region: "default"
+  datacenter: "dc1"
+  heartbeat: "30s"
+
+logging:
+  level: "info"  # debug, info, warn, error
+  format: "json"  # json, text
+
+discovery:
+  enabled: false  # Disable discovery for single node setup
+  servers: []  # No discovery servers for single node
+  timeout: "5s"
+  retry: 3
+
+resources:
+  cpu: true
+  memory: true
+  disk: true
+  network: true
+  interval: "10s"
+
+tasks:
+  max_concurrent: 10
+  timeout: "5m"
+  cleanup: true

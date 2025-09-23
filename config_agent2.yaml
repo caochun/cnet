@@ -1,0 +1,31 @@
+agent:
+  address: "0.0.0.0"
+  port: 8081
+  node_id: "worker-node"
+  node_name: "Worker Node"
+  region: "us-west"
+  datacenter: "dc1"
+  heartbeat: "30s"
+
+logging:
+  level: "info"
+  format: "json"
+
+discovery:
+  enabled: true
+  servers:
+    - "localhost:8080"  # 向Agent 1注册
+  timeout: "5s"
+  retry: 3
+
+resources:
+  cpu: true
+  memory: true
+  disk: true
+  network: true
+  interval: "10s"
+
+tasks:
+  max_concurrent: 10
+  timeout: "5m"
+  cleanup: true

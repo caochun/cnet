@@ -1,0 +1,354 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CNET Agent Dashboard</title>
+    <link rel="stylesheet" href="/static/css/style.css">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+</head>
+<body>
+    <div class="app">
+        <!-- Sidebar -->
+        <nav class="sidebar">
+            <div class="sidebar-header">
+                <h2><i class="fas fa-server"></i> CNET Agent</h2>
+            </div>
+            <ul class="sidebar-menu">
+                <li class="menu-item active" data-page="dashboard">
+                    <i class="fas fa-tachometer-alt"></i>
+                    <span>Dashboard</span>
+                </li>
+                <li class="menu-item" data-page="tasks">
+                    <i class="fas fa-tasks"></i>
+                    <span>Tasks</span>
+                </li>
+                <li class="menu-item" data-page="resources">
+                    <i class="fas fa-chart-bar"></i>
+                    <span>Resources</span>
+                </li>
+                <li class="menu-item" data-page="nodes">
+                    <i class="fas fa-network-wired"></i>
+                    <span>Nodes</span>
+                </li>
+                <li class="menu-item" data-page="logs">
+                    <i class="fas fa-file-alt"></i>
+                    <span>Logs</span>
+                </li>
+            </ul>
+        </nav>
+
+        <!-- Main Content -->
+        <main class="main-content">
+            <!-- Header -->
+            <header class="header">
+                <div class="header-left">
+                    <button class="sidebar-toggle">
+                        <i class="fas fa-bars"></i>
+                    </button>
+                    <h1 id="page-title">Dashboard</h1>
+                </div>
+                <div class="header-right">
+                    <div class="status-indicator">
+                        <span class="status-dot" id="agent-status"></span>
+                        <span id="agent-status-text">Connecting...</span>
+                    </div>
+                    <button class="btn btn-primary" id="refresh-btn">
+                        <i class="fas fa-sync-alt"></i> Refresh
+                    </button>
+                </div>
+            </header>
+
+            <!-- Dashboard Page -->
+            <div class="page" id="dashboard-page">
+                <div class="stats-grid">
+                    <div class="stat-card">
+                        <div class="stat-icon">
+                            <i class="fas fa-server"></i>
+                        </div>
+                        <div class="stat-content">
+                            <h3 id="node-name">Loading...</h3>
+                            <p>Node Name</p>
+                        </div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-icon">
+                            <i class="fas fa-tasks"></i>
+                        </div>
+                        <div class="stat-content">
+                            <h3 id="total-tasks">0</h3>
+                            <p>Total Tasks</p>
+                        </div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-icon">
+                            <i class="fas fa-play"></i>
+                        </div>
+                        <div class="stat-content">
+                            <h3 id="running-tasks">0</h3>
+                            <p>Running Tasks</p>
+                        </div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-icon">
+                            <i class="fas fa-check"></i>
+                        </div>
+                        <div class="stat-content">
+                            <h3 id="completed-tasks">0</h3>
+                            <p>Completed Tasks</p>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="dashboard-grid">
+                    <div class="card">
+                        <div class="card-header">
+                            <h3>Resource Usage</h3>
+                        </div>
+                        <div class="card-content">
+                            <div class="resource-item">
+                                <div class="resource-label">CPU</div>
+                                <div class="resource-bar">
+                                    <div class="resource-fill" id="cpu-usage" style="width: 0%"></div>
+                                </div>
+                                <div class="resource-value" id="cpu-percent">0%</div>
+                            </div>
+                            <div class="resource-item">
+                                <div class="resource-label">Memory</div>
+                                <div class="resource-bar">
+                                    <div class="resource-fill" id="memory-usage" style="width: 0%"></div>
+                                </div>
+                                <div class="resource-value" id="memory-percent">0%</div>
+                            </div>
+                            <div class="resource-item">
+                                <div class="resource-label">Disk</div>
+                                <div class="resource-bar">
+                                    <div class="resource-fill" id="disk-usage" style="width: 0%"></div>
+                                </div>
+                                <div class="resource-value" id="disk-percent">0%</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="card">
+                        <div class="card-header">
+                            <h3>Recent Tasks</h3>
+                        </div>
+                        <div class="card-content">
+                            <div id="recent-tasks">
+                                <div class="empty-state">
+                                    <i class="fas fa-tasks"></i>
+                                    <p>No recent tasks</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="dashboard-grid">
+                    <div class="card">
+                        <div class="card-header">
+                            <h3>Registered Nodes</h3>
+                            <div class="card-actions">
+                                <button class="btn btn-secondary" id="refresh-nodes-btn">
+                                    <i class="fas fa-sync-alt"></i>
+                                </button>
+                            </div>
+                        </div>
+                        <div class="card-content">
+                            <div id="registered-nodes">
+                                <div class="loading">
+                                    <i class="fas fa-spinner fa-spin"></i>
+                                    <p>Loading nodes...</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="card">
+                        <div class="card-header">
+                            <h3>Cluster Overview</h3>
+                        </div>
+                        <div class="card-content">
+                            <div class="cluster-stats">
+                                <div class="stat-item">
+                                    <div class="stat-label">Total Nodes</div>
+                                    <div class="stat-value" id="total-nodes">0</div>
+                                </div>
+                                <div class="stat-item">
+                                    <div class="stat-label">Active Nodes</div>
+                                    <div class="stat-value" id="active-nodes">0</div>
+                                </div>
+                                <div class="stat-item">
+                                    <div class="stat-label">Regions</div>
+                                    <div class="stat-value" id="total-regions">0</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Tasks Page -->
+            <div class="page" id="tasks-page" style="display: none;">
+                <div class="page-header">
+                    <button class="btn btn-primary" id="create-task-btn">
+                        <i class="fas fa-plus"></i> Create Task
+                    </button>
+                </div>
+                <div class="card">
+                    <div class="card-header">
+                        <h3>Tasks</h3>
+                        <div class="card-actions">
+                            <button class="btn btn-secondary" id="refresh-tasks-btn">
+                                <i class="fas fa-sync-alt"></i>
+                            </button>
+                        </div>
+                    </div>
+                    <div class="card-content">
+                        <div class="table-container">
+                            <table class="table" id="tasks-table">
+                                <thead>
+                                    <tr>
+                                        <th>ID</th>
+                                        <th>Name</th>
+                                        <th>Type</th>
+                                        <th>Status</th>
+                                        <th>Created</th>
+                                        <th>Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="tasks-tbody">
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Resources Page -->
+            <div class="page" id="resources-page" style="display: none;">
+                <div class="card">
+                    <div class="card-header">
+                        <h3>System Resources</h3>
+                    </div>
+                    <div class="card-content">
+                        <div class="resource-details" id="resource-details">
+                            <div class="loading">
+                                <i class="fas fa-spinner fa-spin"></i>
+                                <p>Loading resource information...</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Nodes Page -->
+            <div class="page" id="nodes-page" style="display: none;">
+                <div class="card">
+                    <div class="card-header">
+                        <h3>Discovered Nodes</h3>
+                    </div>
+                    <div class="card-content">
+                        <div class="table-container">
+                            <table class="table" id="nodes-table">
+                                <thead>
+                                    <tr>
+                                        <th>ID</th>
+                                        <th>Name</th>
+                                        <th>Address</th>
+                                        <th>Region</th>
+                                        <th>Status</th>
+                                        <th>Last Seen</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="nodes-tbody">
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Logs Page -->
+            <div class="page" id="logs-page" style="display: none;">
+                <div class="card">
+                    <div class="card-header">
+                        <h3>Agent Logs</h3>
+                    </div>
+                    <div class="card-content">
+                        <div class="logs-container" id="logs-container">
+                            <div class="loading">
+                                <i class="fas fa-spinner fa-spin"></i>
+                                <p>Loading logs...</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <!-- Create Task Modal -->
+    <div class="modal" id="create-task-modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Create New Task</h3>
+                <button class="modal-close">&times;</button>
+            </div>
+            <div class="modal-body">
+                <form id="create-task-form">
+                    <div class="form-group">
+                        <label for="task-name">Task Name</label>
+                        <input type="text" id="task-name" name="name" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="task-type">Task Type</label>
+                        <select id="task-type" name="type" required>
+                            <option value="process">Process</option>
+                            <option value="container">Container</option>
+                            <option value="vm">Virtual Machine</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="task-command">Command</label>
+                        <input type="text" id="task-command" name="command" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="task-args">Arguments (one per line)</label>
+                        <textarea id="task-args" name="args" rows="3"></textarea>
+                    </div>
+                    <div class="form-group">
+                        <label for="task-env">Environment Variables (JSON)</label>
+                        <textarea id="task-env" name="env" rows="3" placeholder='{"KEY": "value"}'></textarea>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" id="cancel-task-btn">Cancel</button>
+                <button class="btn btn-primary" id="submit-task-btn">Create Task</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Task Details Modal -->
+    <div class="modal" id="task-details-modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Task Details</h3>
+                <button class="modal-close">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div id="task-details-content">
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" id="close-task-details-btn">Close</button>
+                <button class="btn btn-danger" id="stop-task-btn" style="display: none;">Stop Task</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="/static/js/app.js"></script>
+</body>
+</html>

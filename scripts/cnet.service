@@ -1,0 +1,26 @@
+[Unit]
+Description=CNET Agent
+Documentation=https://github.com/your-org/cnet
+After=network.target
+
+[Service]
+Type=simple
+User=cnet
+Group=cnet
+ExecStart=/usr/local/bin/cnet-agent -config /etc/cnet/config.yaml
+Restart=always
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=cnet
+
+# Security settings
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/cnet
+ReadWritePaths=/tmp/cnet
+
+[Install]
+WantedBy=multi-user.target
