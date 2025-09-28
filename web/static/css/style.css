@@ -652,3 +652,52 @@ body {
     font-weight: 500;
     color: var(--text-primary);
 }
+
+/* Hierarchy ID styles */
+.level-badge {
+    display: inline-block;
+    padding: 0.25rem 0.5rem;
+    background-color: var(--primary-color);
+    color: white;
+    border-radius: 0.375rem;
+    font-size: 0.75rem;
+    font-weight: 500;
+}
+
+.hierarchy-id {
+    font-family: 'Courier New', monospace;
+    font-size: 0.875rem;
+    color: var(--primary-color);
+    background-color: rgba(37, 99, 235, 0.1);
+    padding: 0.25rem 0.5rem;
+    border-radius: 0.25rem;
+    border: 1px solid rgba(37, 99, 235, 0.2);
+}
+
+.resolve-result {
+    background-color: var(--card-bg);
+    border: 1px solid var(--border-color);
+    border-radius: 0.5rem;
+    padding: 1rem;
+    margin-top: 1rem;
+}
+
+.resolve-result p {
+    margin-bottom: 0.5rem;
+}
+
+.resolve-result p:last-child {
+    margin-bottom: 0;
+}
+
+.status-active {
+    color: var(--success-color);
+}
+
+.status-inactive {
+    color: var(--secondary-color);
+}
+
+.status-stale {
+    color: var(--warning-color);
+}

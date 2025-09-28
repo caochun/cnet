@@ -118,7 +118,80 @@ func Load(path string) (*Config, error) {
 		config.Tasks.Timeout = 5 * time.Minute
 	}
 
+	// Validate configuration
+	if err := config.Validate(); err != nil {
+		return nil, fmt.Errorf("configuration validation failed: %w", err)
+	}
+
 	return &config, nil
+}
+
+// Validate validates the configuration
+func (c *Config) Validate() error {
+	// Validate agent configuration
+	if c.Agent.Port <= 0 || c.Agent.Port > 65535 {
+		return fmt.Errorf("invalid port: %d (must be between 1 and 65535)", c.Agent.Port)
+	}
+
+	if c.Agent.NodeID == "" {
+		return fmt.Errorf("node_id cannot be empty")
+	}
+
+	if c.Agent.NodeName == "" {
+		return fmt.Errorf("node_name cannot be empty")
+	}
+
+	if c.Agent.Heartbeat <= 0 {
+		return fmt.Errorf("heartbeat must be positive")
+	}
+
+	// Validate logging configuration
+	validLevels := map[string]bool{
+		"debug": true, "info": true, "warn": true, "error": true,
+	}
+	if !validLevels[c.Logging.Level] {
+		return fmt.Errorf("invalid logging level: %s (must be debug, info, warn, or error)", c.Logging.Level)
+	}
+
+	validFormats := map[string]bool{
+		"json": true, "text": true,
+	}
+	if !validFormats[c.Logging.Format] {
+		return fmt.Errorf("invalid logging format: %s (must be json or text)", c.Logging.Format)
+	}
+
+	// Validate discovery configuration
+	if c.Discovery.Enabled {
+		// Allow empty servers list for root discovery servers
+		// Only require servers if this is not a discovery server node
+		if len(c.Discovery.Servers) == 0 && c.Agent.NodeID != "discovery-server" {
+			return fmt.Errorf("discovery servers cannot be empty when discovery is enabled")
+		}
+
+		if c.Discovery.Timeout <= 0 {
+			return fmt.Errorf("discovery timeout must be positive")
+		}
+
+		if c.Discovery.Retry < 0 {
+			return fmt.Errorf("discovery retry count cannot be negative")
+		}
+	}
+
+	// Validate resources configuration
+	if c.Resources.Interval <= 0 {
+		return fmt.Errorf("resources interval must be positive")
+	}
+
+	// Validate tasks configuration
+	if c.Tasks.MaxConcurrent <= 0 {
+		return fmt.Errorf("max_concurrent must be positive")
+	}
+
+	if c.Tasks.Timeout <= 0 {
+		return fmt.Errorf("tasks timeout must be positive")
+	}
+
+	return nil
 }
 
 func generateNodeID() string {

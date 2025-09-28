@@ -3,8 +3,8 @@
 agent:
   address: "0.0.0.0"
   port: 8080
-  node_id: ""  # Will be auto-generated if empty
-  node_name: ""  # Will use hostname if empty
+  node_id: "discovery-server"
+  node_name: "Discovery Server"
   region: "default"
   datacenter: "dc1"
   heartbeat: "30s"
@@ -14,8 +14,8 @@ logging:
   format: "json"  # json, text
 
 discovery:
-  enabled: false  # Disable discovery for single node setup
-  servers: []  # No discovery servers for single node
+  enabled: true  # Enable discovery for root server
+  servers: []  # No discovery servers for root node
   timeout: "5s"
   retry: 3
 

@@ -43,6 +43,15 @@ class CNETApp {
             this.showCreateTaskModal();
         });
 
+        // Hierarchy management buttons
+        document.getElementById('assign-hierarchy-btn').addEventListener('click', () => {
+            this.showAssignHierarchyModal();
+        });
+
+        document.getElementById('resolve-hierarchy-btn').addEventListener('click', () => {
+            this.showResolveHierarchyModal();
+        });
+
         // Modal controls
         document.querySelectorAll('.modal-close').forEach(btn => {
             btn.addEventListener('click', (e) => {
@@ -57,6 +66,23 @@ class CNETApp {
 
         document.getElementById('cancel-task-btn').addEventListener('click', () => {
             this.closeModal(document.getElementById('create-task-modal'));
+        });
+
+        // Hierarchy management form handlers
+        document.getElementById('submit-hierarchy-btn').addEventListener('click', () => {
+            this.submitAssignHierarchy();
+        });
+
+        document.getElementById('cancel-hierarchy-btn').addEventListener('click', () => {
+            this.closeModal(document.getElementById('assign-hierarchy-modal'));
+        });
+
+        document.getElementById('submit-resolve-btn').addEventListener('click', () => {
+            this.submitResolveHierarchy();
+        });
+
+        document.getElementById('cancel-resolve-btn').addEventListener('click', () => {
+            this.closeModal(document.getElementById('resolve-hierarchy-modal'));
         });
 
         // Close modals on outside click
@@ -127,6 +153,17 @@ class CNETApp {
             // Load node info
             const nodeInfo = await this.apiCall('/node');
             document.getElementById('node-name').textContent = nodeInfo.node_name || 'Unknown';
+
+            // Load node hierarchy information
+            try {
+                const hierarchyInfo = await this.apiCall('/node/hierarchy');
+                document.getElementById('node-hierarchy-id').textContent = hierarchyInfo.hierarchy_id || 'N/A';
+                document.getElementById('node-level').textContent = `Level ${hierarchyInfo.level || 0}`;
+            } catch (error) {
+                console.warn('Failed to load hierarchy info:', error);
+                document.getElementById('node-hierarchy-id').textContent = 'N/A';
+                document.getElementById('node-level').textContent = 'Level 0';
+            }
 
             // Load resource usage
             const usage = await this.apiCall('/resources/usage');
@@ -410,7 +447,7 @@ class CNETApp {
         if (nodes.length === 0) {
             tbody.innerHTML = `
                 <tr>
-                    <td colspan="6" style="text-align: center; padding: 2rem; color: var(--text-secondary);">
+                    <td colspan="8" style="text-align: center; padding: 2rem; color: var(--text-secondary);">
                         No nodes discovered
                     </td>
                 </tr>
@@ -421,9 +458,13 @@ class CNETApp {
         const html = nodes.map(node => `
             <tr>
                 <td style="font-family: monospace; font-size: 0.875rem;">${node.id.substring(0, 8)}...</td>
+                <td style="font-family: monospace; font-size: 0.875rem; color: var(--primary-color);">
+                    ${node.hierarchy_id || 'N/A'}
+                </td>
                 <td>${node.name}</td>
                 <td>${node.address}:${node.port}</td>
                 <td>${node.region}</td>
+                <td><span class="level-badge">Level ${node.level || 0}</span></td>
                 <td><span class="status-badge ${node.status}">${node.status}</span></td>
                 <td>${new Date(node.last_seen).toLocaleString()}</td>
             </tr>
@@ -657,6 +698,91 @@ class CNETApp {
         setTimeout(() => {
             document.body.removeChild(notification);
         }, 5000);
+    }
+
+    // Hierarchy management methods
+    async showAssignHierarchyModal() {
+        try {
+            // Load available nodes
+            const nodes = await this.apiCall('/discovery/nodes');
+            const select = document.getElementById('hierarchy-node-id');
+            
+            // Clear existing options
+            select.innerHTML = '<option value="">Select a node...</option>';
+            
+            // Add node options
+            nodes.forEach(node => {
+                const option = document.createElement('option');
+                option.value = node.id;
+                option.textContent = `${node.name} (${node.id})`;
+                select.appendChild(option);
+            });
+            
+            this.showModal(document.getElementById('assign-hierarchy-modal'));
+        } catch (error) {
+            this.showError(`Failed to load nodes: ${error.message}`);
+        }
+    }
+
+    async showResolveHierarchyModal() {
+        this.showModal(document.getElementById('resolve-hierarchy-modal'));
+    }
+
+    async submitAssignHierarchy() {
+        const form = document.getElementById('assign-hierarchy-form');
+        const formData = new FormData(form);
+        const nodeId = formData.get('node_id');
+        
+        if (!nodeId) {
+            this.showError('Please select a node');
+            return;
+        }
+        
+        try {
+            const response = await this.apiCall('/discovery/hierarchy/assign', 'POST', {
+                node_id: nodeId
+            });
+            
+            this.showSuccess(`Hierarchy ID assigned: ${response.hierarchy_id}`);
+            this.closeModal(document.getElementById('assign-hierarchy-modal'));
+            this.loadPageData('nodes');
+        } catch (error) {
+            this.showError(`Failed to assign hierarchy ID: ${error.message}`);
+        }
+    }
+
+    async submitResolveHierarchy() {
+        const form = document.getElementById('resolve-hierarchy-form');
+        const formData = new FormData(form);
+        const hierarchyId = formData.get('hierarchy_id');
+        
+        if (!hierarchyId) {
+            this.showError('Please enter a hierarchy ID');
+            return;
+        }
+        
+        try {
+            const response = await this.apiCall('/discovery/hierarchy/resolve', 'POST', {
+                hierarchy_id: hierarchyId
+            });
+            
+            // Display resolution result
+            const resultDiv = document.getElementById('resolve-result');
+            const contentDiv = document.getElementById('resolve-content');
+            
+            contentDiv.innerHTML = `
+                <div class="resolve-result">
+                    <p><strong>Node ID:</strong> ${response.node_id}</p>
+                    <p><strong>Address:</strong> ${response.address}:${response.port}</p>
+                    <p><strong>Status:</strong> <span class="status-${response.status}">${response.status}</span></p>
+                    <p><strong>Last Seen:</strong> ${response.last_seen}</p>
+                </div>
+            `;
+            
+            resultDiv.style.display = 'block';
+        } catch (error) {
+            this.showError(`Failed to resolve hierarchy ID: ${error.message}`);
+        }
     }
 }
 

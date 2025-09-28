@@ -73,6 +73,24 @@
                     </div>
                     <div class="stat-card">
                         <div class="stat-icon">
+                            <i class="fas fa-sitemap"></i>
+                        </div>
+                        <div class="stat-content">
+                            <h3 id="node-hierarchy-id">Loading...</h3>
+                            <p>Hierarchy ID</p>
+                        </div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-icon">
+                            <i class="fas fa-layer-group"></i>
+                        </div>
+                        <div class="stat-content">
+                            <h3 id="node-level">Loading...</h3>
+                            <p>Hierarchy Level</p>
+                        </div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-icon">
                             <i class="fas fa-tasks"></i>
                         </div>
                         <div class="stat-content">
@@ -245,6 +263,14 @@
 
             <!-- Nodes Page -->
             <div class="page" id="nodes-page" style="display: none;">
+                <div class="page-header">
+                    <button class="btn btn-primary" id="assign-hierarchy-btn">
+                        <i class="fas fa-sitemap"></i> Assign Hierarchy ID
+                    </button>
+                    <button class="btn btn-secondary" id="resolve-hierarchy-btn">
+                        <i class="fas fa-search"></i> Resolve Hierarchy ID
+                    </button>
+                </div>
                 <div class="card">
                     <div class="card-header">
                         <h3>Discovered Nodes</h3>
@@ -255,9 +281,11 @@
                                 <thead>
                                     <tr>
                                         <th>ID</th>
+                                        <th>Hierarchy ID</th>
                                         <th>Name</th>
                                         <th>Address</th>
                                         <th>Region</th>
+                                        <th>Level</th>
                                         <th>Status</th>
                                         <th>Last Seen</th>
                                     </tr>
@@ -345,6 +373,56 @@
             <div class="modal-footer">
                 <button class="btn btn-secondary" id="close-task-details-btn">Close</button>
                 <button class="btn btn-danger" id="stop-task-btn" style="display: none;">Stop Task</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Assign Hierarchy ID Modal -->
+    <div class="modal" id="assign-hierarchy-modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Assign Hierarchy ID</h3>
+                <button class="modal-close">&times;</button>
+            </div>
+            <div class="modal-body">
+                <form id="assign-hierarchy-form">
+                    <div class="form-group">
+                        <label for="hierarchy-node-id">Node ID</label>
+                        <select id="hierarchy-node-id" name="node_id" required>
+                            <option value="">Select a node...</option>
+                        </select>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" id="cancel-hierarchy-btn">Cancel</button>
+                <button class="btn btn-primary" id="submit-hierarchy-btn">Assign ID</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Resolve Hierarchy ID Modal -->
+    <div class="modal" id="resolve-hierarchy-modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Resolve Hierarchy ID</h3>
+                <button class="modal-close">&times;</button>
+            </div>
+            <div class="modal-body">
+                <form id="resolve-hierarchy-form">
+                    <div class="form-group">
+                        <label for="resolve-hierarchy-id">Hierarchy ID</label>
+                        <input type="text" id="resolve-hierarchy-id" name="hierarchy_id" placeholder="e.g., 34.23.1.8" required>
+                    </div>
+                </form>
+                <div id="resolve-result" style="display: none;">
+                    <h4>Resolution Result:</h4>
+                    <div id="resolve-content"></div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" id="cancel-resolve-btn">Cancel</button>
+                <button class="btn btn-primary" id="submit-resolve-btn">Resolve</button>
             </div>
         </div>
     </div>

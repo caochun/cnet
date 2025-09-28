@@ -7,15 +7,22 @@ CNET Agent 是一个简化的分布式计算节点代理，灵感来自 HashiCor
 - **🚀 工作负载管理**: 支持本地进程执行，容器和虚拟机支持（开发中）
 - **📊 资源监控**: 实时监控 CPU、内存、磁盘和网络使用情况
 - **🌐 节点发现**: 支持节点注册和发现，构建分布式集群
+- **🏷️ 层次化标识**: 支持层次化节点标识分配和解析，如 34.23.1.8
+- **🌳 层次化集群**: 支持多级层次化集群结构，节点可注册到上级节点
+- **🔒 线程安全**: 完全线程安全的discovery服务，支持并发访问
+- **⚡ 高性能**: 优化的锁机制和算法，确保高性能运行
 - **🔌 RESTful API**: 提供完整的 HTTP API 接口
 - **💻 Web UI界面**: 现代化的Web管理界面，支持实时监控和任务管理
 - **⚙️ 配置管理**: 灵活的 YAML 配置文件
 - **📝 日志管理**: 结构化日志输出和任务日志收集
 - **🐳 Docker支持**: 完整的容器化部署方案
 - **🔍 集群监控**: 实时显示注册节点和集群状态
+- **✅ 输入验证**: 完整的输入验证和错误处理
+- **🔄 自动重注册**: 支持节点重复注册和状态更新
 
 ## 架构设计
 
+### 基础架构
 ```
 ┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐
 │   CNET Agent    │    │   CNET Agent    │    │   CNET Agent    │
@@ -34,6 +41,22 @@ CNET Agent 是一个简化的分布式计算节点代理，灵感来自 HashiCor
                     │ (Optional)      │
                     └─────────────────┘
 ```
+
+### 层次化集群架构
+```
+discovery-server (34.23.1) - 根节点
+└── level2-node (34.23.1.1) - Level 2节点
+    └── level3-node (34.23.1.1.1) - Level 3节点
+        ├── level4-node1 (34.23.1.1.1.1) - Level 4节点1
+        └── level4-node2 (34.23.1.1.1.2) - Level 4节点2
+```
+
+**层次化特性**:
+- 🌳 **多级层次**: 支持无限层级的节点层次结构
+- 🏷️ **自动标识**: 自动分配唯一的层次化标识
+- 🔄 **动态注册**: 节点可动态注册到上级节点
+- 🔒 **线程安全**: 完全线程安全的并发访问
+- ⚡ **高性能**: 优化的锁机制和算法
 
 ## 🚀 快速开始
 
@@ -231,6 +254,9 @@ CNET Agent 提供了现代化的 Web 管理界面，包含以下功能：
 - **🌍 区域信息**: 节点所属区域和数据中心
 - **⏰ 最后活跃**: 节点最后活跃时间
 - **🔄 自动发现**: 自动发现和注册新节点
+- **🏷️ 层次化标识**: 支持层次化节点标识管理
+- **🌳 层次结构**: 按层次组织节点，支持父子关系
+- **🔍 标识解析**: 通过层次化标识快速定位节点
 
 ### 📝 日志查看 (Logs)
 - **📄 Agent日志**: 系统运行日志
@@ -305,6 +331,26 @@ curl -X POST http://localhost:8080/api/discovery/register \
   }'
 ```
 
+### 🏷️ 层次化标识管理
+```bash
+# 为节点分配层次化标识
+curl -X POST http://localhost:8080/api/discovery/hierarchy/assign \
+  -H "Content-Type: application/json" \
+  -d '{
+    "node_id": "node-1"
+  }'
+
+# 解析层次化标识
+curl -X POST http://localhost:8080/api/discovery/hierarchy/resolve \
+  -H "Content-Type: application/json" \
+  -d '{
+    "hierarchy_id": "34.23.1.8"
+  }'
+
+# 按层次结构列出节点
+curl http://localhost:8080/api/discovery/hierarchy/nodes
+```
+
 ## 🧪 演示和测试
 
 ### 快速演示
@@ -317,6 +363,9 @@ curl -X POST http://localhost:8080/api/discovery/register \
 
 # 测试节点发现
 ./examples/test_discovery.sh
+
+# 测试层次化标识功能
+./examples/test_hierarchy.sh
 ```
 
 ### 多节点演示
@@ -328,103 +377,173 @@ curl -X POST http://localhost:8080/api/discovery/register \
 ./examples/test_two_agents.sh
 ```
 
-### 🌐 双Agent集群部署
+### 🌐 层次化集群部署
 
-CNET Agent支持多节点集群部署，可以实现节点发现和负载分布。
+CNET Agent支持多级层次化集群部署，可以实现复杂的节点层次结构。
 
-#### 配置文件说明
+#### 层次化集群配置
 
-项目提供了两个预配置的Agent配置文件：
+项目提供了完整的层次化集群配置文件：
 
-**Agent 1 (发现服务器) - `config_agent1.yaml`**:
+**根节点 (discovery-server) - `config.yaml`**:
 ```yaml
 agent:
   address: "0.0.0.0"
   port: 8080
   node_id: "discovery-server"
   node_name: "Discovery Server"
-  region: "us-west"
+  region: "default"
   datacenter: "dc1"
 
 discovery:
   enabled: true
-  servers: []  # 作为发现服务器，不向其他服务器注册
+  servers: []  # 根节点，不向其他服务器注册
 ```
 
-**Agent 2 (工作节点) - `config_agent2.yaml`**:
+**Level 2节点 - `config_level2.yaml`**:
 ```yaml
 agent:
   address: "0.0.0.0"
-  port: 8081
-  node_id: "worker-node"
-  node_name: "Worker Node"
+  port: 8082
+  node_id: "level2-node"
+  node_name: "Level 2 Node"
   region: "us-west"
   datacenter: "dc1"
 
 discovery:
   enabled: true
   servers:
-    - "localhost:8080"  # 向Agent 1注册
+    - "localhost:8080"  # 向根节点注册
 ```
 
-#### 手动启动双Agent
+**Level 3节点 - `config_level3.yaml`**:
+```yaml
+agent:
+  address: "0.0.0.0"
+  port: 8083
+  node_id: "level3-node"
+  node_name: "Level 3 Node"
+  region: "us-west"
+  datacenter: "dc1"
+
+discovery:
+  enabled: true
+  servers:
+    - "localhost:8082"  # 向Level 2节点注册
+```
+
+**Level 4节点 - `config_level4_node1.yaml`**:
+```yaml
+agent:
+  address: "0.0.0.0"
+  port: 8084
+  node_id: "level4-node1"
+  node_name: "Level 4 Node 1"
+  region: "us-west"
+  datacenter: "dc1"
+
+discovery:
+  enabled: true
+  servers:
+    - "localhost:8083"  # 向Level 3节点注册
+```
+
+#### 启动层次化集群
 
 ```bash
-# 启动Agent 1 (发现服务器)
-./bin/cnet-agent -config config_agent1.yaml > agent1.log 2>&1 &
+# 1. 启动根节点 (discovery-server)
+./bin/cnet-agent -config config.yaml > discovery-server.log 2>&1 &
+sleep 3
 
-# 等待Agent 1启动
-sleep 5
+# 2. 启动Level 2节点
+./bin/cnet-agent -config config_level2.yaml > level2.log 2>&1 &
+sleep 3
 
-# 启动Agent 2 (工作节点)
-./bin/cnet-agent -config config_agent2.yaml > agent2.log 2>&1 &
+# 3. 启动Level 3节点
+./bin/cnet-agent -config config_level3.yaml > level3.log 2>&1 &
+sleep 3
 
-# 查看Agent状态
-curl http://localhost:8080/api/health
-curl http://localhost:8081/api/health
+# 4. 启动Level 4节点
+./bin/cnet-agent -config config_level4_node1.yaml > level4_node1.log 2>&1 &
+./bin/cnet-agent -config config_level4_node2.yaml > level4_node2.log 2>&1 &
 
-# 查看发现的节点
-curl http://localhost:8080/api/discovery/nodes
+# 查看所有节点状态
+curl http://localhost:8080/api/health  # 根节点
+curl http://localhost:8082/api/health  # Level 2
+curl http://localhost:8083/api/health  # Level 3
+curl http://localhost:8084/api/health  # Level 4节点1
+curl http://localhost:8085/api/health  # Level 4节点2
+```
+
+#### 层次化集群验证
+
+```bash
+# 查看根节点的层次化结构
+curl http://localhost:8080/api/discovery/hierarchy/nodes | jq .
+
+# 查看Level 2节点的子节点
+curl http://localhost:8082/api/discovery/hierarchy/nodes | jq .
+
+# 查看Level 3节点的子节点
+curl http://localhost:8083/api/discovery/hierarchy/nodes | jq .
+
+# 查看完整的层次化结构
+echo "=== 完整的层次化结构 ==="
+echo "discovery-server (34.23.1)"
+echo "└── level2-node (34.23.1.1)"
+echo "    └── level3-node (34.23.1.1.1)"
+echo "        ├── level4-node1 (34.23.1.1.1.1)"
+echo "        └── level4-node2 (34.23.1.1.1.2)"
 ```
 
 #### 访问地址
 
 启动后可以访问以下地址：
 
-- **Agent 1 (发现服务器)**: http://localhost:8080
-- **Agent 2 (工作节点)**: http://localhost:8081
+- **根节点 (discovery-server)**: http://localhost:8080
+- **Level 2节点**: http://localhost:8082
+- **Level 3节点**: http://localhost:8083
+- **Level 4节点1**: http://localhost:8084
+- **Level 4节点2**: http://localhost:8085
 
-#### 集群功能验证
+#### 层次化集群功能验证
 
 ```bash
-# 检查Agent 1发现的节点
-curl http://localhost:8080/api/discovery/nodes
+# 检查根节点发现的节点
+curl http://localhost:8080/api/discovery/nodes | jq .
 
-# 检查Agent 2发现的节点
-curl http://localhost:8081/api/discovery/nodes
+# 检查Level 2节点发现的节点
+curl http://localhost:8082/api/discovery/nodes | jq .
 
-# 在Agent 1上创建任务
+# 检查Level 3节点发现的节点
+curl http://localhost:8083/api/discovery/nodes | jq .
+
+# 测试层次化标识解析
+curl -X POST http://localhost:8080/api/discovery/hierarchy/resolve \
+  -H "Content-Type: application/json" \
+  -d '{"hierarchy_id": "34.23.1.1.1.1"}'
+
+# 在不同层级的节点上创建任务
 curl -X POST http://localhost:8080/api/tasks \
   -H "Content-Type: application/json" \
   -d '{
-    "name": "test-task-1",
+    "name": "root-task",
     "type": "process",
     "command": "echo",
-    "args": ["Hello from Agent 1"]
+    "args": ["Hello from Root Node"]
   }'
 
-# 在Agent 2上创建任务
-curl -X POST http://localhost:8081/api/tasks \
+curl -X POST http://localhost:8083/api/tasks \
   -H "Content-Type: application/json" \
   -d '{
-    "name": "test-task-2",
+    "name": "level3-task",
     "type": "process",
     "command": "echo",
-    "args": ["Hello from Agent 2"]
+    "args": ["Hello from Level 3 Node"]
   }'
 ```
 
-#### 停止双Agent
+#### 停止层次化集群
 
 ```bash
 # 停止所有Agent
@@ -433,6 +552,32 @@ pkill -f cnet-agent
 # 或使用脚本停止
 ./examples/stop_agents.sh
 ```
+
+## 🔧 技术特性
+
+### 线程安全设计
+- **🔒 读写锁分离**: 使用 `sync.RWMutex` 实现高效的并发访问
+- **⚡ 无死锁设计**: 避免在已持有锁的情况下再次获取锁
+- **🔄 原子操作**: 确保数据一致性和线程安全
+- **📊 性能优化**: 最小化锁的持有时间，提高并发性能
+
+### 层次化标识系统
+- **🏷️ 自动分配**: 自动为节点分配唯一的层次化标识
+- **🌳 无限层级**: 支持任意深度的层次结构
+- **🔍 快速解析**: 高效的标识解析和查找算法
+- **📈 动态扩展**: 支持动态添加和删除节点
+
+### 输入验证和错误处理
+- **✅ 完整验证**: 对所有输入进行严格验证
+- **🛡️ 错误处理**: 详细的错误信息和日志记录
+- **🔄 重试机制**: 自动重试失败的注册请求
+- **📝 状态管理**: 完善的节点状态管理
+
+### 性能优化
+- **⚡ 高效算法**: 优化的字符串操作和数据结构
+- **🔒 锁优化**: 减少锁竞争，提高并发性能
+- **💾 内存管理**: 高效的内存使用和垃圾回收
+- **📊 监控指标**: 实时性能监控和统计
 
 ## 📋 任务类型
 
@@ -678,6 +823,11 @@ MIT License
 - [x] 本地进程任务执行
 - [x] 资源监控 (CPU、内存、磁盘、网络)
 - [x] 节点发现和注册
+- [x] 层次化集群支持
+- [x] 层次化标识分配和解析
+- [x] 线程安全的discovery服务
+- [x] 输入验证和错误处理
+- [x] 性能优化和锁机制
 - [x] RESTful API接口
 - [x] Web UI界面
 - [x] 集群节点显示
@@ -711,8 +861,20 @@ MIT License
 - ✅ **工作负载管理**: 支持本地进程执行
 - ✅ **资源监控**: 完整的系统资源监控
 - ✅ **节点发现**: 分布式集群支持
+- ✅ **层次化集群**: 支持多级层次化集群结构
+- ✅ **线程安全**: 完全线程安全的discovery服务
+- ✅ **性能优化**: 高效的锁机制和算法
+- ✅ **输入验证**: 完整的输入验证和错误处理
 - ✅ **Web UI**: 现代化管理界面
 - ✅ **API接口**: 完整的RESTful API
 - ✅ **Docker支持**: 容器化部署
+
+### 🚀 最新更新
+
+- **🌳 层次化集群**: 支持无限层级的节点层次结构
+- **🔒 线程安全**: 完全线程安全的并发访问
+- **⚡ 性能优化**: 优化的锁机制和算法
+- **✅ 输入验证**: 完整的输入验证和错误处理
+- **🔄 自动重注册**: 支持节点重复注册和状态更新
 
 项目正在持续改进中，欢迎贡献代码和反馈！🚀

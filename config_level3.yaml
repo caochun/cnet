@@ -1,8 +1,8 @@
 agent:
   address: "0.0.0.0"
-  port: 8080
-  node_id: "discovery-server"
-  node_name: "Discovery Server"
+  port: 8083
+  node_id: "level3-node"
+  node_name: "Level 3 Node"
   region: "us-west"
   datacenter: "dc1"
   heartbeat: "30s"
@@ -12,8 +12,9 @@ logging:
   format: "json"
 
 discovery:
-  enabled: false  # 作为发现服务器，不需要向其他服务器注册
-  servers: []
+  enabled: true
+  servers:
+    - "localhost:8082"  # 向Level 2节点注册
   timeout: "5s"
   retry: 3
 
