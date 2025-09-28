@@ -305,7 +305,7 @@ def main():
 
 if __name__ == "__main__":
     main()
-`, modelPath, scriptPath)
+`, task.ID, modelPath, scriptPath, modelPath, scriptPath)
 
 	// Write script to file
 	if err := os.WriteFile(outputPath, []byte(script), 0755); err != nil {

@@ -114,6 +114,11 @@ type PyTorchInferenceEngine struct {
 	logger *logger.Logger
 }
 
+// YOLOInferenceEngine executes YOLO models
+type YOLOInferenceEngine struct {
+	logger *logger.Logger
+}
+
 // New creates a new ML service
 func New(cfg *config.Config, log *logger.Logger) (*Service, error) {
 	ctx, cancel := context.WithCancel(context.Background())
@@ -131,6 +136,7 @@ func New(cfg *config.Config, log *logger.Logger) (*Service, error) {
 	service.engines["python"] = &PythonInferenceEngine{logger: log}
 	service.engines["tensorflow"] = &TensorFlowInferenceEngine{logger: log}
 	service.engines["pytorch"] = &PyTorchInferenceEngine{logger: log}
+	service.engines["yolo"] = &YOLOInferenceEngine{logger: log}
 
 	return service, nil
 }
@@ -496,5 +502,73 @@ func (e *PyTorchInferenceEngine) GetModelInfo(model *Model) (map[string]interfac
 // HealthCheck checks the health of the model
 func (e *PyTorchInferenceEngine) HealthCheck(model *Model) error {
 	// TODO: Implement health check
+	return nil
+}
+
+// YOLOInferenceEngine implementation
+
+// LoadModel loads a YOLO model
+func (e *YOLOInferenceEngine) LoadModel(model *Model) error {
+	e.logger.Infof("Loading YOLO model: %s", model.Name)
+	// TODO: Implement YOLO model loading
+	// This would start a YOLO inference server
+	return nil
+}
+
+// UnloadModel unloads a YOLO model
+func (e *YOLOInferenceEngine) UnloadModel(model *Model) error {
+	e.logger.Infof("Unloading YOLO model: %s", model.Name)
+	// TODO: Implement YOLO model unloading
+	return nil
+}
+
+// Infer performs inference using YOLO
+func (e *YOLOInferenceEngine) Infer(model *Model, request *InferenceRequest) (*InferenceResponse, error) {
+	e.logger.Infof("Performing YOLO inference on model: %s", model.Name)
+
+	// TODO: Implement YOLO inference
+	// This would make HTTP requests to the YOLO inference server
+	return &InferenceResponse{
+		Prediction: map[string]interface{}{
+			"detections": []map[string]interface{}{
+				{
+					"class_id":   0,
+					"class_name": "person",
+					"confidence": 0.95,
+					"bounding_box": map[string]float64{
+						"x":      100.0,
+						"y":      150.0,
+						"width":  80.0,
+						"height": 200.0,
+					},
+				},
+			},
+			"model_type": "yolo",
+		},
+		Confidence: 0.95,
+		Metadata: map[string]interface{}{
+			"engine":     "yolo",
+			"model_type": model.Config.Framework,
+		},
+	}, nil
+}
+
+// GetModelInfo gets information about the YOLO model
+func (e *YOLOInferenceEngine) GetModelInfo(model *Model) (map[string]interface{}, error) {
+	return map[string]interface{}{
+		"engine":     "yolo",
+		"status":     "loaded",
+		"model_type": model.Config.Framework,
+		"classes": []string{
+			"person", "bicycle", "car", "motorcycle", "airplane", "bus", "train", "truck",
+			"boat", "traffic light", "fire hydrant", "stop sign", "parking meter", "bench",
+		},
+	}, nil
+}
+
+// HealthCheck checks the health of the YOLO model
+func (e *YOLOInferenceEngine) HealthCheck(model *Model) error {
+	// TODO: Implement YOLO health check
+	// This would check if the YOLO inference server is running
 	return nil
 }

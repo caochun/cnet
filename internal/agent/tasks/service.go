@@ -87,6 +87,7 @@ func New(cfg *config.Config, log *logger.Logger) (*Service, error) {
 	service.executors["container"] = NewContainerExecutor(log)
 	service.executors["vm"] = NewVMExecutor(log)
 	service.executors["ml"] = NewMLExecutor(log)
+	service.executors["yolo"] = NewYOLOExecutor(log)
 
 	return service, nil
 }

@@ -57,6 +57,7 @@ func (s *Server) initTaskHandlers() {
 	s.taskHandlers["container"] = NewContainerTaskHandler(s)
 	s.taskHandlers["vm"] = NewVMTaskHandler(s)
 	s.taskHandlers["ml"] = NewMLTaskHandler(s)
+	s.taskHandlers["yolo"] = NewYOLOTaskHandler(s)
 }
 
 // setupRoutes sets up the API routes
@@ -122,6 +123,17 @@ func (s *Server) setupRoutes() {
 	api.HandleFunc("/ml/tasks/{id}/logs", s.handleMLTasks).Methods("GET")
 	api.HandleFunc("/ml/tasks/{id}/info", s.handleMLTasks).Methods("GET")
 	api.HandleFunc("/ml/tasks/{id}/health", s.handleMLTasks).Methods("GET")
+
+	// YOLO tasks
+	api.HandleFunc("/yolo/tasks", s.handleYOLOTasks).Methods("GET")
+	api.HandleFunc("/yolo/tasks", s.handleYOLOTasks).Methods("POST")
+	api.HandleFunc("/yolo/tasks/{id}", s.handleYOLOTasks).Methods("GET")
+	api.HandleFunc("/yolo/tasks/{id}", s.handleYOLOTasks).Methods("DELETE")
+	api.HandleFunc("/yolo/tasks/{id}/predict", s.handleYOLOTasks).Methods("POST")
+	api.HandleFunc("/yolo/tasks/{id}/logs", s.handleYOLOTasks).Methods("GET")
+	api.HandleFunc("/yolo/tasks/{id}/info", s.handleYOLOTasks).Methods("GET")
+	api.HandleFunc("/yolo/tasks/{id}/health", s.handleYOLOTasks).Methods("GET")
+	api.HandleFunc("/yolo/tasks/{id}/model", s.handleYOLOTasks).Methods("GET")
 
 	// Legacy ML API routes for backward compatibility
 	api.HandleFunc("/ml/models", s.handleMLTasks).Methods("GET")
@@ -279,6 +291,46 @@ func (s *Server) handleMLTasks(w http.ResponseWriter, r *http.Request) {
 				mlHandler.Predict(w, r)
 			} else {
 				s.writeError(w, http.StatusInternalServerError, "ML handler not available", nil)
+			}
+		} else {
+			handler.CreateTask(w, r)
+		}
+	case "DELETE":
+		handler.StopTask(w, r)
+	default:
+		s.writeError(w, http.StatusMethodNotAllowed, "Method not allowed", nil)
+	}
+}
+
+func (s *Server) handleYOLOTasks(w http.ResponseWriter, r *http.Request) {
+	handler := s.taskHandlers["yolo"]
+	switch r.Method {
+	case "GET":
+		if r.URL.Path == "/api/yolo/tasks" {
+			handler.ListTasks(w, r)
+		} else if r.URL.Path[len(r.URL.Path)-5:] == "/info" {
+			handler.GetTaskInfo(w, r)
+		} else if r.URL.Path[len(r.URL.Path)-6:] == "/health" {
+			handler.GetTaskHealth(w, r)
+		} else if r.URL.Path[len(r.URL.Path)-5:] == "/logs" {
+			handler.GetTaskLogs(w, r)
+		} else if r.URL.Path[len(r.URL.Path)-6:] == "/model" {
+			// Special case for YOLO model info
+			if yoloHandler, ok := handler.(*YOLOTaskHandler); ok {
+				yoloHandler.GetModelInfo(w, r)
+			} else {
+				s.writeError(w, http.StatusInternalServerError, "YOLO handler not available", nil)
+			}
+		} else {
+			handler.GetTask(w, r)
+		}
+	case "POST":
+		if r.URL.Path[len(r.URL.Path)-8:] == "/predict" {
+			// Special case for YOLO prediction
+			if yoloHandler, ok := handler.(*YOLOTaskHandler); ok {
+				yoloHandler.Predict(w, r)
+			} else {
+				s.writeError(w, http.StatusInternalServerError, "YOLO handler not available", nil)
 			}
 		} else {
 			handler.CreateTask(w, r)

@@ -1,0 +1,36 @@
+version: '3.8'
+
+services:
+  yolo-service:
+    build:
+      context: .
+      dockerfile: Dockerfile.yolo
+    ports:
+      - "8080:8080"
+    environment:
+      - YOLO_MODEL_PATH=yolo11n.pt
+      - PYTHONPATH=/app
+    volumes:
+      - ./models:/app/models
+      - ./results:/tmp/cnet/yolo_results
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  cnet-agent:
+    build:
+      context: ..
+      dockerfile: Dockerfile
+    ports:
+      - "8081:8080"
+    depends_on:
+      - yolo-service
+    environment:
+      - YOLO_SERVICE_URL=http://yolo-service:8080
+    volumes:
+      - ./configs:/app/configs
+    restart: unless-stopped
