@@ -31,6 +31,10 @@
                     <i class="fas fa-network-wired"></i>
                     <span>Nodes</span>
                 </li>
+                <li class="menu-item" data-page="models">
+                    <i class="fas fa-brain"></i>
+                    <span>ML Models</span>
+                </li>
                 <li class="menu-item" data-page="logs">
                     <i class="fas fa-file-alt"></i>
                     <span>Logs</span>
@@ -298,6 +302,43 @@
                 </div>
             </div>
 
+            <!-- ML Models Page -->
+            <div class="page" id="models-page" style="display: none;">
+                <div class="page-header">
+                    <button class="btn btn-primary" id="create-model-btn">
+                        <i class="fas fa-plus"></i> Create Model
+                    </button>
+                    <button class="btn btn-secondary" id="refresh-models-btn">
+                        <i class="fas fa-sync"></i> Refresh
+                    </button>
+                </div>
+                <div class="card">
+                    <div class="card-header">
+                        <h3>ML Models</h3>
+                    </div>
+                    <div class="card-content">
+                        <div class="table-container">
+                            <table class="table" id="models-table">
+                                <thead>
+                                    <tr>
+                                        <th>ID</th>
+                                        <th>Name</th>
+                                        <th>Type</th>
+                                        <th>Engine</th>
+                                        <th>Status</th>
+                                        <th>Endpoint</th>
+                                        <th>Created</th>
+                                        <th>Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="models-tbody">
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
             <!-- Logs Page -->
             <div class="page" id="logs-page" style="display: none;">
                 <div class="card">
@@ -336,6 +377,15 @@
                             <option value="process">Process</option>
                             <option value="container">Container</option>
                             <option value="vm">Virtual Machine</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="task-preset">Task Preset</label>
+                        <select id="task-preset" name="preset">
+                            <option value="">Custom Task</option>
+                            <option value="ml-linear-regression">ML: Linear Regression</option>
+                            <option value="ml-neural-network">ML: Neural Network</option>
+                            <option value="ml-custom">ML: Custom Model</option>
                         </select>
                     </div>
                     <div class="form-group">
@@ -426,6 +476,7 @@
             </div>
         </div>
     </div>
+
 
     <script src="/static/js/app.js"></script>
 </body>

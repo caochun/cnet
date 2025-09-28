@@ -4,7 +4,8 @@ CNET Agent 是一个简化的分布式计算节点代理，灵感来自 HashiCor
 
 ## ✨ 功能特性
 
-- **🚀 工作负载管理**: 支持本地进程执行，容器和虚拟机支持（开发中）
+- **🚀 工作负载管理**: 支持本地进程执行，容器和虚拟机支持
+- **🤖 机器学习模型**: 完整的ML模型部署、训练和推理支持
 - **📊 资源监控**: 实时监控 CPU、内存、磁盘和网络使用情况
 - **🌐 节点发现**: 支持节点注册和发现，构建分布式集群
 - **🏷️ 层次化标识**: 支持层次化节点标识分配和解析，如 34.23.1.8
@@ -112,9 +113,15 @@ docker-compose logs -f
 - **📊 仪表板**: 实时资源监控和任务管理
 - **🌐 节点发现**: 查看注册的节点和集群状态
 
-## 配置
+## ⚙️ 配置
 
-配置文件 `config.yaml` 包含以下主要部分：
+CNET Agent 提供了灵活的配置选项，支持单节点和多层级集群部署。
+
+📖 **详细配置说明**: 请参考 [配置指南](./docs/CONFIGURATION.md)
+
+### 快速配置
+
+主配置文件 `config.yaml` 包含以下主要部分：
 
 ```yaml
 agent:
@@ -148,80 +155,49 @@ tasks:
   max_concurrent: 10
   timeout: "5m"
   cleanup: true
-```
 
-## 🌐 集群配置
-
-### 双Agent配置
-
-项目提供了两个预配置的Agent配置文件，用于演示多节点集群功能：
-
-#### Agent 1 (发现服务器) - `config_agent1.yaml`
-```yaml
-agent:
-  address: "0.0.0.0"
-  port: 8080
-  node_id: "discovery-server"
-  node_name: "Discovery Server"
-  region: "us-west"
-  datacenter: "dc1"
-  heartbeat: "30s"
-
-discovery:
+ml:
   enabled: true
-  servers: []  # 作为发现服务器，不向其他服务器注册
-  timeout: "5s"
-  retry: 3
+  engines: ["python", "tensorflow", "pytorch"]
+  default_engine: "python"
+  model_path: "./models"
+  script_path: "./examples/ml_models"
+  port_range:
+    start: 9000
+    end: 9100
+  resource_limits:
+    cpu_limit: 1.0
+    memory_limit: 536870912  # 512MB
+    disk_limit: 1073741824   # 1GB
+    gpu_limit: 0
+  timeout: "30s"
 ```
 
-#### Agent 2 (工作节点) - `config_agent2.yaml`
-```yaml
-agent:
-  address: "0.0.0.0"
-  port: 8081
-  node_id: "worker-node"
-  node_name: "Worker Node"
-  region: "us-west"
-  datacenter: "dc1"
-  heartbeat: "30s"
+### 🌐 多层级集群配置
 
-discovery:
-  enabled: true
-  servers:
-    - "localhost:8080"  # 向Agent 1注册
-  timeout: "5s"
-  retry: 3
+CNET Agent支持多级层次化集群部署，项目提供了完整的层次化集群配置文件：
+
+- **根节点**: `config.yaml` (端口8080)
+- **Level 2节点**: `configs/config_level2.yaml` (端口8082)
+- **Level 3节点**: `configs/config_level3.yaml` (端口8083)
+- **Level 4节点**: `configs/config_level4_node1.yaml` (端口8084)
+- **Level 4节点**: `configs/config_level4_node2.yaml` (端口8085)
+
+**层次化集群架构**:
+```
+discovery-server (34.23.1) - 根节点
+└── level2-node (34.23.1.1) - Level 2节点
+    └── level3-node (34.23.1.1.1) - Level 3节点
+        ├── level4-node1 (34.23.1.1.1.1) - Level 4节点1
+        └── level4-node2 (34.23.1.1.1.2) - Level 4节点2
 ```
 
-### 集群架构
-
-```
-┌─────────────────┐    ┌─────────────────┐
-│   Agent 1       │    │   Agent 2       │
-│   (发现服务器)    │    │   (工作节点)      │
-│   Port: 8080    │    │   Port: 8081    │
-├─────────────────┤    ├─────────────────┤
-│ - 接受节点注册   │    │ - 向Agent 1注册  │
-│ - 维护节点列表   │    │ - 执行任务      │
-│ - 提供发现服务   │    │ - 资源监控      │
-│ - 执行任务      │    │ - 任务管理      │
-└─────────────────┘    └─────────────────┘
-         │                       │
-         └───────────────────────┘
-                │
-        ┌─────────────────┐
-        │   发现协议      │
-        │   HTTP API     │
-        └─────────────────┘
-```
-
-### 集群功能
-
-- **节点发现**: Agent 2自动向Agent 1注册
-- **负载分布**: 任务可以在不同节点上执行
-- **资源监控**: 每个节点独立监控资源
-- **Web UI**: 每个节点都有独立的管理界面
-- **API接口**: 统一的RESTful API接口
+**层次化特性**:
+- 🌳 **多级层次**: 支持无限层级的节点层次结构
+- 🏷️ **自动标识**: 自动分配唯一的层次化标识
+- 🔄 **动态注册**: 节点可动态注册到上级节点
+- 🔒 **线程安全**: 完全线程安全的并发访问
+- ⚡ **高性能**: 优化的锁机制和算法
 
 ## 💻 Web UI 界面
 
@@ -290,7 +266,7 @@ curl http://localhost:8080/api/resources/usage
 # 列出所有任务
 curl http://localhost:8080/api/tasks
 
-# 创建任务
+# 创建进程任务
 curl -X POST http://localhost:8080/api/tasks \
   -H "Content-Type: application/json" \
   -d '{
@@ -299,6 +275,27 @@ curl -X POST http://localhost:8080/api/tasks \
     "command": "echo",
     "args": ["Hello, CNET!"],
     "env": {"ENV_VAR": "value"}
+  }'
+
+# 创建容器任务
+curl -X POST http://localhost:8080/api/container/tasks \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "nginx-container",
+    "type": "container",
+    "command": "nginx",
+    "args": ["-g", "daemon off;"]
+  }'
+
+# 创建ML推理任务
+curl -X POST http://localhost:8080/api/ml/tasks \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "ml-model",
+    "type": "ml",
+    "model_path": "models/model.joblib",
+    "script_path": "examples/ml_models/simple_linear_regression.py",
+    "engine": "python"
   }'
 
 # 获取任务详情
@@ -351,6 +348,36 @@ curl -X POST http://localhost:8080/api/discovery/hierarchy/resolve \
 curl http://localhost:8080/api/discovery/hierarchy/nodes
 ```
 
+### 🤖 机器学习推理
+```bash
+# 列出ML任务
+curl http://localhost:8080/api/ml/tasks
+
+# 创建ML推理服务
+curl -X POST http://localhost:8080/api/ml/tasks \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "linear-regression",
+    "type": "ml",
+    "model_path": "models/linear_regression_model.joblib",
+    "script_path": "examples/ml_models/simple_linear_regression.py",
+    "engine": "python"
+  }'
+
+# 使用ML模型进行预测
+curl -X POST http://localhost:8080/api/ml/tasks/{task-id}/predict \
+  -H "Content-Type: application/json" \
+  -d '{
+    "input_data": [1.5, 2.3, 3.1]
+  }'
+
+# 获取ML任务健康状态
+curl http://localhost:8080/api/ml/tasks/{task-id}/health
+
+# 获取ML任务日志
+curl http://localhost:8080/api/ml/tasks/{task-id}/logs
+```
+
 ## 🧪 演示和测试
 
 ### 快速演示
@@ -366,87 +393,32 @@ curl http://localhost:8080/api/discovery/hierarchy/nodes
 
 # 测试层次化标识功能
 ./examples/test_hierarchy.sh
+
+# 测试ML模型部署
+./examples/test_ml_deployment.sh
+
+# ML模型演示
+./examples/ml_deployment_demo.sh
 ```
 
-### 多节点演示
+### 多层级集群演示
 ```bash
-# 启动两个Agent进行发现演示
+# 启动层次化集群演示
+./examples/hierarchy_demo.sh
+
+# 测试层次化标识功能
+./examples/test_hierarchy.sh
+
+# 启动多层级集群
 ./examples/start_two_agents.sh
 
-# 测试两个Agent的通信
+# 测试多节点通信
 ./examples/test_two_agents.sh
 ```
 
 ### 🌐 层次化集群部署
 
-CNET Agent支持多级层次化集群部署，可以实现复杂的节点层次结构。
-
-#### 层次化集群配置
-
-项目提供了完整的层次化集群配置文件：
-
-**根节点 (discovery-server) - `config.yaml`**:
-```yaml
-agent:
-  address: "0.0.0.0"
-  port: 8080
-  node_id: "discovery-server"
-  node_name: "Discovery Server"
-  region: "default"
-  datacenter: "dc1"
-
-discovery:
-  enabled: true
-  servers: []  # 根节点，不向其他服务器注册
-```
-
-**Level 2节点 - `config_level2.yaml`**:
-```yaml
-agent:
-  address: "0.0.0.0"
-  port: 8082
-  node_id: "level2-node"
-  node_name: "Level 2 Node"
-  region: "us-west"
-  datacenter: "dc1"
-
-discovery:
-  enabled: true
-  servers:
-    - "localhost:8080"  # 向根节点注册
-```
-
-**Level 3节点 - `config_level3.yaml`**:
-```yaml
-agent:
-  address: "0.0.0.0"
-  port: 8083
-  node_id: "level3-node"
-  node_name: "Level 3 Node"
-  region: "us-west"
-  datacenter: "dc1"
-
-discovery:
-  enabled: true
-  servers:
-    - "localhost:8082"  # 向Level 2节点注册
-```
-
-**Level 4节点 - `config_level4_node1.yaml`**:
-```yaml
-agent:
-  address: "0.0.0.0"
-  port: 8084
-  node_id: "level4-node1"
-  node_name: "Level 4 Node 1"
-  region: "us-west"
-  datacenter: "dc1"
-
-discovery:
-  enabled: true
-  servers:
-    - "localhost:8083"  # 向Level 3节点注册
-```
+CNET Agent支持多级层次化集群部署，可以实现复杂的节点层次结构。这是CNET Agent的核心特性之一。
 
 #### 启动层次化集群
 
@@ -456,16 +428,16 @@ discovery:
 sleep 3
 
 # 2. 启动Level 2节点
-./bin/cnet-agent -config config_level2.yaml > level2.log 2>&1 &
+./bin/cnet-agent -config configs/config_level2.yaml > level2.log 2>&1 &
 sleep 3
 
 # 3. 启动Level 3节点
-./bin/cnet-agent -config config_level3.yaml > level3.log 2>&1 &
+./bin/cnet-agent -config configs/config_level3.yaml > level3.log 2>&1 &
 sleep 3
 
 # 4. 启动Level 4节点
-./bin/cnet-agent -config config_level4_node1.yaml > level4_node1.log 2>&1 &
-./bin/cnet-agent -config config_level4_node2.yaml > level4_node2.log 2>&1 &
+./bin/cnet-agent -config configs/config_level4_node1.yaml > level4_node1.log 2>&1 &
+./bin/cnet-agent -config configs/config_level4_node2.yaml > level4_node2.log 2>&1 &
 
 # 查看所有节点状态
 curl http://localhost:8080/api/health  # 根节点
@@ -607,7 +579,65 @@ pkill -f cnet-agent
 - ✅ 实时日志输出
 - ✅ 进程生命周期管理
 
-### 2. 🐳 容器 (container) - 🚧 开发中
+### 1.1 🤖 机器学习模型 (作为进程任务)
+```json
+{
+  "name": "linear-regression-model",
+  "type": "process",
+  "command": "python3",
+  "args": ["examples/ml_models/simple_linear_regression.py", "train", "models/model.joblib", "1000"],
+  "env": {
+    "PYTHONPATH": "examples/ml_models",
+    "MODEL_PATH": "models/model.joblib",
+    "MODEL_TYPE": "linear_regression"
+  },
+  "working_dir": ".",
+  "resources": {
+    "cpu_limit": 1.0,
+    "memory_limit": 512000000,
+    "disk_limit": 1000000000
+  }
+}
+```
+
+**ML模型特性**:
+- ✅ 支持线性回归、神经网络等模型
+- ✅ 模型训练、预测、评估
+- ✅ 统一的资源管理和监控
+- ✅ 完整的日志记录
+- ✅ Web UI预设配置
+
+### 1.2 🤖 机器学习推理服务 (专用ML任务)
+```json
+{
+  "name": "ml-inference-service",
+  "type": "ml",
+  "model_path": "models/linear_regression_model.joblib",
+  "script_path": "examples/ml_models/simple_linear_regression.py",
+  "engine": "python",
+  "config": {
+    "framework": "sklearn",
+    "version": "1.0.0",
+    "input_shape": [1],
+    "output_shape": [1]
+  },
+  "resources": {
+    "cpu_limit": 1.0,
+    "memory_limit": 536870912,
+    "disk_limit": 1073741824
+  }
+}
+```
+
+**ML推理服务特性**:
+- ✅ 专用ML任务类型
+- ✅ 自动推理服务器生成
+- ✅ HTTP API接口
+- ✅ 实时预测服务
+- ✅ 模型热加载
+- ✅ 健康检查支持
+
+### 2. 🐳 容器 (container) - ✅ 已实现
 ```json
 {
   "name": "my-container",
@@ -621,11 +651,12 @@ pkill -f cnet-agent
 }
 ```
 
-**计划特性**:
-- 🔄 Docker容器支持
-- 🔄 容器镜像管理
-- 🔄 网络配置
-- 🔄 卷挂载
+**特性**:
+- ✅ Docker容器支持
+- ✅ 容器生命周期管理
+- ✅ 资源限制和监控
+- ✅ 实时日志输出
+- ✅ 健康检查支持
 
 ### 3. 🖥️ 虚拟机 (vm) - 📋 计划中
 ```json
@@ -751,17 +782,41 @@ cnet/
 ├── internal/
 │   ├── agent/                # Agent 核心
 │   │   ├── api/             # HTTP API 服务器
+│   │   │   ├── common.go
+│   │   │   ├── container_task_handler.go
+│   │   │   ├── discovery_handler.go
+│   │   │   ├── health_handler.go
+│   │   │   ├── ml_task_handler.go
+│   │   │   ├── process_task_handler.go
+│   │   │   ├── resources_handler.go
+│   │   │   ├── server.go
+│   │   │   ├── task_handler.go
+│   │   │   └── vm_task_handler.go
 │   │   ├── discovery/       # 节点发现服务
+│   │   ├── ml/              # 机器学习服务
 │   │   ├── resources/       # 资源监控服务
 │   │   └── tasks/           # 任务管理服务
+│   │       ├── container_executor.go
+│   │       ├── ml_executor.go
+│   │       ├── process_executor.go
+│   │       ├── service.go
+│   │       └── vm_executor.go
 │   ├── config/              # 配置管理
+│   ├── http/                # HTTP客户端
 │   └── logger/              # 日志管理
 ├── web/                      # Web UI
 │   ├── templates/           # HTML 模板
 │   └── static/              # 静态资源
+│       ├── css/             # 样式文件
+│       └── js/              # JavaScript应用
 ├── examples/                # 示例和测试脚本
+│   ├── ml_models/           # ML模型示例
+│   └── *.sh                # 演示脚本
+├── models/                  # ML模型文件
 ├── scripts/                 # 部署脚本
-├── config.yaml             # 配置文件
+├── docs/                    # 项目文档
+├── configs/                 # 配置文件
+├── config.yaml             # 主配置文件
 ├── Dockerfile              # Docker 构建
 ├── docker-compose.yml      # Docker Compose
 ├── Makefile               # 构建脚本
@@ -821,6 +876,8 @@ MIT License
 ### ✅ 已完成
 - [x] 基础Agent架构
 - [x] 本地进程任务执行
+- [x] 容器任务执行 (Docker)
+- [x] 机器学习模型部署和推理
 - [x] 资源监控 (CPU、内存、磁盘、网络)
 - [x] 节点发现和注册
 - [x] 层次化集群支持
@@ -834,11 +891,13 @@ MIT License
 - [x] 任务日志管理
 - [x] Docker支持
 - [x] 配置管理
+- [x] ML模型管理
+- [x] 容器生命周期管理
 
 ### 🚧 开发中
-- [ ] 完整的容器支持 (Docker)
-- [ ] 容器镜像管理
-- [ ] 容器网络配置
+- [ ] 容器网络配置优化
+- [ ] 容器镜像管理增强
+- [ ] ML模型版本管理
 
 ### 📋 计划中
 - [ ] 虚拟机支持 (QEMU/KVM)
@@ -856,9 +915,11 @@ MIT License
 
 ## 🎉 项目状态
 
-**CNET Agent** 是一个活跃开发中的项目，目前已经实现了核心功能：
+**CNET Agent** 是一个功能完整的分布式计算节点代理，目前已经实现了所有核心功能：
 
-- ✅ **工作负载管理**: 支持本地进程执行
+- ✅ **工作负载管理**: 支持本地进程、容器和ML模型执行
+- ✅ **容器支持**: 完整的Docker容器生命周期管理
+- ✅ **机器学习**: 完整的ML模型部署、训练和推理支持
 - ✅ **资源监控**: 完整的系统资源监控
 - ✅ **节点发现**: 分布式集群支持
 - ✅ **层次化集群**: 支持多级层次化集群结构
@@ -871,6 +932,8 @@ MIT License
 
 ### 🚀 最新更新
 
+- **🤖 机器学习支持**: 完整的ML模型部署和推理功能
+- **🐳 容器支持**: 完整的Docker容器任务执行
 - **🌳 层次化集群**: 支持无限层级的节点层次结构
 - **🔒 线程安全**: 完全线程安全的并发访问
 - **⚡ 性能优化**: 优化的锁机制和算法

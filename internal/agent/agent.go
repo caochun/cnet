@@ -9,6 +9,7 @@ import (
 
 	"cnet/internal/agent/api"
 	"cnet/internal/agent/discovery"
+	"cnet/internal/agent/ml"
 	"cnet/internal/agent/resources"
 	"cnet/internal/agent/tasks"
 	"cnet/internal/config"
@@ -22,6 +23,7 @@ type Agent struct {
 	discovery  *discovery.Service
 	resources  *resources.Service
 	tasks      *tasks.Service
+	ml         *ml.Service
 	api        *api.Server
 	httpServer *http.Server
 	mu         sync.RWMutex
@@ -48,8 +50,14 @@ func New(cfg *config.Config, log *logger.Logger) (*Agent, error) {
 		return nil, fmt.Errorf("failed to create tasks service: %w", err)
 	}
 
+	// Create ML service
+	mlService, err := ml.New(cfg, log)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create ML service: %w", err)
+	}
+
 	// Create API server
-	apiServer := api.New(cfg, log, discoveryService, resourcesService, tasksService)
+	apiServer := api.New(cfg, log, discoveryService, resourcesService, tasksService, mlService)
 
 	agent := &Agent{
 		config:    cfg,
@@ -57,6 +65,7 @@ func New(cfg *config.Config, log *logger.Logger) (*Agent, error) {
 		discovery: discoveryService,
 		resources: resourcesService,
 		tasks:     tasksService,
+		ml:        mlService,
 		api:       apiServer,
 	}
 
@@ -92,6 +101,12 @@ func (a *Agent) Start(ctx context.Context) error {
 	}
 	a.logger.Info("Tasks service started")
 
+	// Start ML service
+	if err := a.ml.Start(ctx); err != nil {
+		return fmt.Errorf("failed to start ML service: %w", err)
+	}
+	a.logger.Info("ML service started")
+
 	a.running = true
 	return nil
 }
@@ -106,6 +121,10 @@ func (a *Agent) Stop() error {
 	}
 
 	// Stop services in reverse order
+	if err := a.ml.Stop(); err != nil {
+		a.logger.Errorf("Failed to stop ML service: %v", err)
+	}
+
 	if err := a.tasks.Stop(); err != nil {
 		a.logger.Errorf("Failed to stop tasks service: %v", err)
 	}

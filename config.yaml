@@ -30,3 +30,19 @@ tasks:
   max_concurrent: 10
   timeout: "5m"
   cleanup: true
+
+ml:
+  enabled: true
+  engines: ["python", "tensorflow", "pytorch"]
+  default_engine: "python"
+  model_path: "./models"
+  script_path: "./examples/ml_models"
+  port_range:
+    start: 9000
+    end: 9100
+  resource_limits:
+    cpu_limit: 1.0
+    memory_limit: 536870912  # 512MB
+    disk_limit: 1073741824   # 1GB
+    gpu_limit: 0
+  timeout: "30s"

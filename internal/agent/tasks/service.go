@@ -1,11 +1,9 @@
 package tasks
 
 import (
-	"bufio"
 	"context"
 	"fmt"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"sync"
 	"time"
@@ -71,21 +69,6 @@ type Executor interface {
 	GetLogs(task *Task, lines int) ([]string, error)
 }
 
-// ProcessExecutor executes local processes
-type ProcessExecutor struct {
-	logger *logger.Logger
-}
-
-// ContainerExecutor executes Docker containers
-type ContainerExecutor struct {
-	logger *logger.Logger
-}
-
-// VMExecutor executes virtual machines (placeholder)
-type VMExecutor struct {
-	logger *logger.Logger
-}
-
 // New creates a new tasks service
 func New(cfg *config.Config, log *logger.Logger) (*Service, error) {
 	ctx, cancel := context.WithCancel(context.Background())
@@ -100,9 +83,10 @@ func New(cfg *config.Config, log *logger.Logger) (*Service, error) {
 	}
 
 	// Register executors
-	service.executors["process"] = &ProcessExecutor{logger: log}
-	service.executors["container"] = &ContainerExecutor{logger: log}
-	service.executors["vm"] = &VMExecutor{logger: log}
+	service.executors["process"] = NewProcessExecutor(log)
+	service.executors["container"] = NewContainerExecutor(log)
+	service.executors["vm"] = NewVMExecutor(log)
+	service.executors["ml"] = NewMLExecutor(log)
 
 	return service, nil
 }
@@ -272,130 +256,4 @@ func (s *Service) stopTask(task *Task) error {
 	task.StoppedAt = &now
 
 	return nil
-}
-
-// ProcessExecutor implementation
-
-// Execute executes a local process
-func (e *ProcessExecutor) Execute(ctx context.Context, task *Task) error {
-	cmd := exec.CommandContext(ctx, task.Command, task.Args...)
-
-	// Set working directory
-	if task.WorkingDir != "" {
-		cmd.Dir = task.WorkingDir
-	}
-
-	// Set environment variables
-	cmd.Env = os.Environ()
-	for key, value := range task.Env {
-		cmd.Env = append(cmd.Env, fmt.Sprintf("%s=%s", key, value))
-	}
-
-	// Create log file
-	logFile, err := os.Create(task.LogFile)
-	if err != nil {
-		return fmt.Errorf("failed to create log file: %w", err)
-	}
-	defer logFile.Close()
-
-	// Set up output
-	cmd.Stdout = logFile
-	cmd.Stderr = logFile
-
-	// Start process
-	if err := cmd.Start(); err != nil {
-		return fmt.Errorf("failed to start process: %w", err)
-	}
-
-	task.Process = cmd.Process
-
-	// Wait for completion
-	err = cmd.Wait()
-	if err != nil {
-		if exitError, ok := err.(*exec.ExitError); ok {
-			exitCode := exitError.ExitCode()
-			task.ExitCode = &exitCode
-		}
-		return err
-	}
-
-	exitCode := 0
-	task.ExitCode = &exitCode
-	return nil
-}
-
-// Stop stops a local process
-func (e *ProcessExecutor) Stop(task *Task) error {
-	if task.Process != nil {
-		return task.Process.Kill()
-	}
-	return nil
-}
-
-// GetLogs retrieves logs for a local process
-func (e *ProcessExecutor) GetLogs(task *Task, lines int) ([]string, error) {
-	file, err := os.Open(task.LogFile)
-	if err != nil {
-		return nil, fmt.Errorf("failed to open log file: %w", err)
-	}
-	defer file.Close()
-
-	// Read all lines
-	var allLines []string
-	scanner := bufio.NewScanner(file)
-	for scanner.Scan() {
-		allLines = append(allLines, scanner.Text())
-	}
-
-	if err := scanner.Err(); err != nil {
-		return nil, fmt.Errorf("failed to read log file: %w", err)
-	}
-
-	// Return last N lines
-	start := 0
-	if len(allLines) > lines {
-		start = len(allLines) - lines
-	}
-
-	return allLines[start:], nil
-}
-
-// ContainerExecutor implementation (placeholder)
-
-// Execute executes a Docker container
-func (e *ContainerExecutor) Execute(ctx context.Context, task *Task) error {
-	// TODO: Implement Docker container execution
-	return fmt.Errorf("container execution not implemented")
-}
-
-// Stop stops a Docker container
-func (e *ContainerExecutor) Stop(task *Task) error {
-	// TODO: Implement Docker container stopping
-	return fmt.Errorf("container stopping not implemented")
-}
-
-// GetLogs retrieves logs for a Docker container
-func (e *ContainerExecutor) GetLogs(task *Task, lines int) ([]string, error) {
-	// TODO: Implement Docker container log retrieval
-	return nil, fmt.Errorf("container log retrieval not implemented")
-}
-
-// VMExecutor implementation (placeholder)
-
-// Execute executes a virtual machine
-func (e *VMExecutor) Execute(ctx context.Context, task *Task) error {
-	// TODO: Implement VM execution
-	return fmt.Errorf("VM execution not implemented")
-}
-
-// Stop stops a virtual machine
-func (e *VMExecutor) Stop(task *Task) error {
-	// TODO: Implement VM stopping
-	return fmt.Errorf("VM stopping not implemented")
-}
-
-// GetLogs retrieves logs for a virtual machine
-func (e *VMExecutor) GetLogs(task *Task, lines int) ([]string, error) {
-	// TODO: Implement VM log retrieval
-	return nil, fmt.Errorf("VM log retrieval not implemented")
 }

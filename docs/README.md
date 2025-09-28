@@ -9,22 +9,22 @@
 - **[Web UI节点功能](./WEBUI_NODES_FEATURE.md)** - Web UI节点管理功能说明
 
 ### 配置文档
+- **[配置指南](./CONFIGURATION.md)** - 完整的配置选项和说明
 - **[集群配置总结](./CLUSTER_CONFIG_SUMMARY.md)** - 集群配置文件和说明
 - **[日志位置说明](./LOGS_LOCATION.md)** - 日志文件位置和说明
 
-### 项目文档
-- **[项目总结](./PROJECT_SUMMARY.md)** - 项目整体架构和功能总结
-- **[README更新总结](./README_UPDATE_SUMMARY.md)** - README文件更新历史
-
-### 开发文档
-- **[Git忽略文件说明](./GITIGNORE_EXPLANATION.md)** - .gitignore文件配置说明
+### 机器学习文档
+- **[ML模型部署](./ML_MODEL_DEPLOYMENT.md)** - 机器学习模型部署指南
+- **[ML部署总结](./ML_DEPLOYMENT_SUMMARY.md)** - ML功能部署总结
+- **[ML推理引擎架构](./ML_INFERENCE_ENGINE_ARCHITECTURE.md)** - ML推理引擎架构说明
+- **[ML作为进程指南](./ML_AS_PROCESS_GUIDE.md)** - ML模型作为进程任务指南
 
 ## 🚀 快速导航
 
 - **主要文档**: 查看 [../README.md](../README.md) 获取完整的项目说明
 - **层次化集群**: 查看 [层次化集群功能](./HIERARCHY_FEATURE.md) 了解集群架构
 - **Web UI**: 查看 [Web UI节点功能](./WEBUI_NODES_FEATURE.md) 了解界面功能
-- **配置**: 查看 [集群配置总结](./CLUSTER_CONFIG_SUMMARY.md) 了解配置选项
+- **配置**: 查看 [配置指南](./CONFIGURATION.md) 了解完整配置选项
 
 ## 📝 文档维护
 

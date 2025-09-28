@@ -15,6 +15,7 @@ type Config struct {
 	Discovery DiscoveryConfig `yaml:"discovery"`
 	Resources ResourcesConfig `yaml:"resources"`
 	Tasks     TasksConfig     `yaml:"tasks"`
+	ML        MLConfig        `yaml:"ml"`
 }
 
 // AgentConfig contains agent-specific configuration
@@ -56,6 +57,32 @@ type TasksConfig struct {
 	MaxConcurrent int           `yaml:"max_concurrent"`
 	Timeout       time.Duration `yaml:"timeout"`
 	Cleanup       bool          `yaml:"cleanup"`
+}
+
+// MLConfig contains ML inference engine configuration
+type MLConfig struct {
+	Enabled        bool           `yaml:"enabled"`
+	Engines        []string       `yaml:"engines"`
+	DefaultEngine  string         `yaml:"default_engine"`
+	ModelPath      string         `yaml:"model_path"`
+	ScriptPath     string         `yaml:"script_path"`
+	PortRange      PortRange      `yaml:"port_range"`
+	ResourceLimits ResourceLimits `yaml:"resource_limits"`
+	Timeout        time.Duration  `yaml:"timeout"`
+}
+
+// PortRange represents a range of ports for ML services
+type PortRange struct {
+	Start int `yaml:"start"`
+	End   int `yaml:"end"`
+}
+
+// ResourceLimits represents default resource limits for ML models
+type ResourceLimits struct {
+	CPULimit    float64 `yaml:"cpu_limit"`
+	MemoryLimit int64   `yaml:"memory_limit"`
+	DiskLimit   int64   `yaml:"disk_limit"`
+	GPULimit    int     `yaml:"gpu_limit"`
 }
 
 // Load loads configuration from file
@@ -116,6 +143,38 @@ func Load(path string) (*Config, error) {
 	}
 	if config.Tasks.Timeout == 0 {
 		config.Tasks.Timeout = 5 * time.Minute
+	}
+
+	// Set ML defaults
+	if config.ML.Engines == nil {
+		config.ML.Engines = []string{"python", "tensorflow", "pytorch"}
+	}
+	if config.ML.DefaultEngine == "" {
+		config.ML.DefaultEngine = "python"
+	}
+	if config.ML.ModelPath == "" {
+		config.ML.ModelPath = "./models"
+	}
+	if config.ML.ScriptPath == "" {
+		config.ML.ScriptPath = "./examples/ml_models"
+	}
+	if config.ML.PortRange.Start == 0 {
+		config.ML.PortRange.Start = 9000
+	}
+	if config.ML.PortRange.End == 0 {
+		config.ML.PortRange.End = 9100
+	}
+	if config.ML.ResourceLimits.CPULimit == 0 {
+		config.ML.ResourceLimits.CPULimit = 1.0
+	}
+	if config.ML.ResourceLimits.MemoryLimit == 0 {
+		config.ML.ResourceLimits.MemoryLimit = 512 * 1024 * 1024 // 512MB
+	}
+	if config.ML.ResourceLimits.DiskLimit == 0 {
+		config.ML.ResourceLimits.DiskLimit = 1024 * 1024 * 1024 // 1GB
+	}
+	if config.ML.Timeout == 0 {
+		config.ML.Timeout = 30 * time.Second
 	}
 
 	// Validate configuration
@@ -189,6 +248,54 @@ func (c *Config) Validate() error {
 
 	if c.Tasks.Timeout <= 0 {
 		return fmt.Errorf("tasks timeout must be positive")
+	}
+
+	// Validate ML configuration
+	if c.ML.Enabled {
+		if len(c.ML.Engines) == 0 {
+			return fmt.Errorf("ML engines cannot be empty when ML is enabled")
+		}
+
+		validEngines := map[string]bool{
+			"python": true, "tensorflow": true, "pytorch": true,
+		}
+		for _, engine := range c.ML.Engines {
+			if !validEngines[engine] {
+				return fmt.Errorf("invalid ML engine: %s (must be python, tensorflow, or pytorch)", engine)
+			}
+		}
+
+		if c.ML.DefaultEngine == "" {
+			return fmt.Errorf("default ML engine cannot be empty")
+		}
+
+		if !validEngines[c.ML.DefaultEngine] {
+			return fmt.Errorf("invalid default ML engine: %s", c.ML.DefaultEngine)
+		}
+
+		if c.ML.PortRange.Start <= 0 || c.ML.PortRange.End <= 0 {
+			return fmt.Errorf("ML port range must be positive")
+		}
+
+		if c.ML.PortRange.Start >= c.ML.PortRange.End {
+			return fmt.Errorf("ML port range start must be less than end")
+		}
+
+		if c.ML.ResourceLimits.CPULimit <= 0 {
+			return fmt.Errorf("ML CPU limit must be positive")
+		}
+
+		if c.ML.ResourceLimits.MemoryLimit <= 0 {
+			return fmt.Errorf("ML memory limit must be positive")
+		}
+
+		if c.ML.ResourceLimits.DiskLimit <= 0 {
+			return fmt.Errorf("ML disk limit must be positive")
+		}
+
+		if c.ML.Timeout <= 0 {
+			return fmt.Errorf("ML timeout must be positive")
+		}
 	}
 
 	return nil

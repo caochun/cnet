@@ -43,6 +43,16 @@ class CNETApp {
             this.showCreateTaskModal();
         });
 
+        // ML Models buttons
+        document.getElementById('refresh-models-btn').addEventListener('click', () => {
+            this.loadModels();
+        });
+
+        document.getElementById('create-model-btn').addEventListener('click', () => {
+            this.showCreateModelModal();
+        });
+
+
         // Hierarchy management buttons
         document.getElementById('assign-hierarchy-btn').addEventListener('click', () => {
             this.showAssignHierarchyModal();
@@ -68,6 +78,11 @@ class CNETApp {
             this.closeModal(document.getElementById('create-task-modal'));
         });
 
+        // Task preset handler
+        document.getElementById('task-preset').addEventListener('change', (e) => {
+            this.handleTaskPreset(e.target.value);
+        });
+
         // Hierarchy management form handlers
         document.getElementById('submit-hierarchy-btn').addEventListener('click', () => {
             this.submitAssignHierarchy();
@@ -84,6 +99,7 @@ class CNETApp {
         document.getElementById('cancel-resolve-btn').addEventListener('click', () => {
             this.closeModal(document.getElementById('resolve-hierarchy-modal'));
         });
+
 
         // Close modals on outside click
         document.querySelectorAll('.modal').forEach(modal => {
@@ -123,6 +139,7 @@ class CNETApp {
             tasks: 'Tasks',
             resources: 'Resources',
             nodes: 'Nodes',
+            models: 'ML Models',
             logs: 'Logs'
         };
         return titles[page] || 'Dashboard';
@@ -141,6 +158,9 @@ class CNETApp {
                 break;
             case 'nodes':
                 this.loadNodes();
+                break;
+            case 'models':
+                this.loadModels();
                 break;
             case 'logs':
                 this.loadLogs();
@@ -784,6 +804,309 @@ class CNETApp {
             this.showError(`Failed to resolve hierarchy ID: ${error.message}`);
         }
     }
+
+    // Task Preset Handler
+    handleTaskPreset(preset) {
+        const nameField = document.getElementById('task-name');
+        const commandField = document.getElementById('task-command');
+        const argsField = document.getElementById('task-args');
+        const envField = document.getElementById('task-env');
+        const workingDirField = document.getElementById('task-working-dir');
+        const cpuLimitField = document.getElementById('task-cpu-limit');
+        const memoryLimitField = document.getElementById('task-memory-limit');
+
+        switch(preset) {
+            case 'ml-linear-regression':
+                nameField.value = 'linear-regression-model';
+                commandField.value = 'python3';
+                argsField.value = 'examples/ml_models/simple_linear_regression.py,train,models/linear_regression_model.joblib,1000';
+                envField.value = 'PYTHONPATH=examples/ml_models,MODEL_PATH=models/linear_regression_model.joblib,MODEL_TYPE=linear_regression';
+                workingDirField.value = '.';
+                cpuLimitField.value = '1.0';
+                memoryLimitField.value = '512';
+                break;
+            case 'ml-neural-network':
+                nameField.value = 'neural-network-model';
+                commandField.value = 'python3';
+                argsField.value = 'examples/ml_models/neural_network.py,train,models/neural_network_model.h5,1000,50';
+                envField.value = 'PYTHONPATH=examples/ml_models,MODEL_PATH=models/neural_network_model.h5,MODEL_TYPE=neural_network';
+                workingDirField.value = '.';
+                cpuLimitField.value = '2.0';
+                memoryLimitField.value = '1024';
+                break;
+            case 'ml-custom':
+                nameField.value = 'custom-ml-model';
+                commandField.value = 'python3';
+                argsField.value = 'your_script.py,train,models/your_model.joblib,1000';
+                envField.value = 'PYTHONPATH=examples/ml_models,MODEL_PATH=models/your_model.joblib,MODEL_TYPE=custom';
+                workingDirField.value = '.';
+                cpuLimitField.value = '1.0';
+                memoryLimitField.value = '512';
+                break;
+            default:
+                // Clear fields for custom task
+                nameField.value = '';
+                commandField.value = '';
+                argsField.value = '';
+                envField.value = '';
+                workingDirField.value = '.';
+                cpuLimitField.value = '1.0';
+                memoryLimitField.value = '512';
+                break;
+        }
+    }
+
+    // ML Models Management
+    async loadModels() {
+        try {
+            const response = await fetch(`${this.apiBase}/ml/models`);
+            const models = await response.json();
+            
+            const tbody = document.getElementById('models-tbody');
+            tbody.innerHTML = '';
+            
+            models.forEach(model => {
+                const row = document.createElement('tr');
+                row.innerHTML = `
+                    <td>${model.id.substring(0, 8)}...</td>
+                    <td>${model.name}</td>
+                    <td>${model.type}</td>
+                    <td>${model.engine}</td>
+                    <td><span class="status status-${model.status}">${model.status}</span></td>
+                    <td>${model.endpoint || 'N/A'}</td>
+                    <td>${new Date(model.created_at).toLocaleString()}</td>
+                    <td>
+                        <button class="btn btn-sm btn-info" onclick="app.viewModelLogs('${model.id}')">
+                            <i class="fas fa-file-alt"></i> Logs
+                        </button>
+                        <button class="btn btn-sm btn-warning" onclick="app.viewModelInfo('${model.id}')">
+                            <i class="fas fa-info"></i> Info
+                        </button>
+                        <button class="btn btn-sm btn-success" onclick="app.testModel('${model.id}')">
+                            <i class="fas fa-play"></i> Test
+                        </button>
+                        <button class="btn btn-sm btn-danger" onclick="app.stopModel('${model.id}')">
+                            <i class="fas fa-stop"></i> Stop
+                        </button>
+                    </td>
+                `;
+                tbody.appendChild(row);
+            });
+        } catch (error) {
+            this.showError(`Failed to load models: ${error.message}`);
+        }
+    }
+
+    showCreateModelModal() {
+        const modal = document.createElement('div');
+        modal.className = 'modal';
+        modal.innerHTML = `
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h3>Create ML Model</h3>
+                    <button class="modal-close">&times;</button>
+                </div>
+                <div class="modal-body">
+                    <form id="create-model-form">
+                        <div class="form-group">
+                            <label for="model-name">Model Name</label>
+                            <input type="text" id="model-name" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="model-type">Model Type</label>
+                            <select id="model-type" required>
+                                <option value="linear_regression">Linear Regression</option>
+                                <option value="neural_network">Neural Network</option>
+                                <option value="custom">Custom</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label for="model-engine">Inference Engine</label>
+                            <select id="model-engine" required>
+                                <option value="python">Python</option>
+                                <option value="tensorflow">TensorFlow</option>
+                                <option value="pytorch">PyTorch</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label for="model-path">Model Path</label>
+                            <input type="text" id="model-path" placeholder="models/model.joblib" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="script-path">Script Path</label>
+                            <input type="text" id="script-path" placeholder="examples/ml_models/script.py" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="model-cpu-limit">CPU Limit</label>
+                            <input type="number" id="model-cpu-limit" value="1.0" step="0.1" min="0.1">
+                        </div>
+                        <div class="form-group">
+                            <label for="model-memory-limit">Memory Limit (MB)</label>
+                            <input type="number" id="model-memory-limit" value="512" min="64">
+                        </div>
+                        <div class="form-actions">
+                            <button type="submit" class="btn btn-primary">Create Model</button>
+                            <button type="button" class="btn btn-secondary modal-close">Cancel</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        `;
+        
+        document.body.appendChild(modal);
+        
+        // Event listeners
+        modal.querySelector('.modal-close').addEventListener('click', () => {
+            document.body.removeChild(modal);
+        });
+        
+        modal.querySelector('#create-model-form').addEventListener('submit', (e) => {
+            e.preventDefault();
+            this.createModel();
+        });
+    }
+
+    async createModel() {
+        try {
+            const formData = {
+                name: document.getElementById('model-name').value,
+                type: document.getElementById('model-type').value,
+                engine: document.getElementById('model-engine').value,
+                model_path: document.getElementById('model-path').value,
+                script_path: document.getElementById('script-path').value,
+                resources: {
+                    cpu_limit: parseFloat(document.getElementById('model-cpu-limit').value),
+                    memory_limit: parseInt(document.getElementById('model-memory-limit').value) * 1024 * 1024,
+                    disk_limit: 1024 * 1024 * 1024,
+                    gpu_limit: 0
+                }
+            };
+
+            const response = await fetch(`${this.apiBase}/ml/models`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(formData)
+            });
+
+            if (response.ok) {
+                this.showSuccess('Model created successfully');
+                document.querySelector('.modal-close').click();
+                this.loadModels();
+            } else {
+                const error = await response.json();
+                this.showError(`Failed to create model: ${error.error}`);
+            }
+        } catch (error) {
+            this.showError(`Failed to create model: ${error.message}`);
+        }
+    }
+
+    async viewModelLogs(modelId) {
+        try {
+            const response = await fetch(`${this.apiBase}/ml/models/${modelId}/logs`);
+            const logs = await response.json();
+            
+            const modal = document.createElement('div');
+            modal.className = 'modal';
+            modal.innerHTML = `
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h3>Model Logs</h3>
+                        <button class="modal-close">&times;</button>
+                    </div>
+                    <div class="modal-body">
+                        <div class="logs-container" style="max-height: 400px; overflow-y: auto;">
+                            ${logs.map(log => `<div class="log-line">${log}</div>`).join('')}
+                        </div>
+                    </div>
+                </div>
+            `;
+            
+            document.body.appendChild(modal);
+            modal.querySelector('.modal-close').addEventListener('click', () => {
+                document.body.removeChild(modal);
+            });
+        } catch (error) {
+            this.showError(`Failed to load model logs: ${error.message}`);
+        }
+    }
+
+    async viewModelInfo(modelId) {
+        try {
+            const response = await fetch(`${this.apiBase}/ml/models/${modelId}/info`);
+            const info = await response.json();
+            
+            const modal = document.createElement('div');
+            modal.className = 'modal';
+            modal.innerHTML = `
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h3>Model Information</h3>
+                        <button class="modal-close">&times;</button>
+                    </div>
+                    <div class="modal-body">
+                        <pre>${JSON.stringify(info, null, 2)}</pre>
+                    </div>
+                </div>
+            `;
+            
+            document.body.appendChild(modal);
+            modal.querySelector('.modal-close').addEventListener('click', () => {
+                document.body.removeChild(modal);
+            });
+        } catch (error) {
+            this.showError(`Failed to load model info: ${error.message}`);
+        }
+    }
+
+    async testModel(modelId) {
+        const inputData = prompt('Enter input data for testing (JSON format):');
+        if (!inputData) return;
+        
+        try {
+            const testData = JSON.parse(inputData);
+            const response = await fetch(`${this.apiBase}/ml/models/${modelId}/predict`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ input_data: testData })
+            });
+            
+            if (response.ok) {
+                const result = await response.json();
+                this.showSuccess(`Prediction: ${JSON.stringify(result.prediction)}`);
+            } else {
+                const error = await response.json();
+                this.showError(`Prediction failed: ${error.error}`);
+            }
+        } catch (error) {
+            this.showError(`Test failed: ${error.message}`);
+        }
+    }
+
+    async stopModel(modelId) {
+        if (!confirm('Are you sure you want to stop this model?')) return;
+        
+        try {
+            const response = await fetch(`${this.apiBase}/ml/models/${modelId}`, {
+                method: 'DELETE'
+            });
+            
+            if (response.ok) {
+                this.showSuccess('Model stopped successfully');
+                this.loadModels();
+            } else {
+                const error = await response.json();
+                this.showError(`Failed to stop model: ${error.error}`);
+            }
+        } catch (error) {
+            this.showError(`Failed to stop model: ${error.message}`);
+        }
+    }
+
 }
 
 // Initialize the app when DOM is loaded
