@@ -91,7 +91,7 @@ func main() {
 	if err := ag.Start(); err != nil {
 		logger.Fatalf("Failed to start agent: %v", err)
 	}
-
+	
 	// 创建HTTP API
 	api := manager.NewAPI(ag.GetManager(), ag.GetRegister(), logger)
 

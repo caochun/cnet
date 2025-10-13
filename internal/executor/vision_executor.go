@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 
 	"cnet/internal/workload"
 
@@ -17,23 +18,114 @@ import (
 
 // VisionExecutor 计算机视觉执行器（基于GoCV）
 type VisionExecutor struct {
-	logger *logrus.Logger
-	tasks  map[string]*visionTask
+	logger       *logrus.Logger
+	tasks        map[string]*visionTask
+	modelCache   map[string]*gocv.Net               // 模型缓存
+	cascadeCache map[string]*gocv.CascadeClassifier // Cascade分类器缓存
+	mu           sync.RWMutex                       // 缓存锁
 }
 
 type visionTask struct {
-	workload *workload.VisionWorkload
-	net      *gocv.Net
-	cascade  *gocv.CascadeClassifier
-	results  interface{}
+	workload     *workload.VisionWorkload
+	useCachedNet bool // 是否使用缓存的网络
+	results      interface{}
 }
 
 // NewVisionExecutor 创建Vision执行器
+// 模型会在首次使用时自动加载并缓存到内存
 func NewVisionExecutor(logger *logrus.Logger) *VisionExecutor {
+	logger.Info("Vision Executor initialized (models will be cached on first use)")
 	return &VisionExecutor{
-		logger: logger,
-		tasks:  make(map[string]*visionTask),
+		logger:       logger,
+		tasks:        make(map[string]*visionTask),
+		modelCache:   make(map[string]*gocv.Net),
+		cascadeCache: make(map[string]*gocv.CascadeClassifier),
 	}
+}
+
+// getOrLoadModel 获取或加载模型（带缓存）
+func (e *VisionExecutor) getOrLoadModel(modelPath, configPath string) (*gocv.Net, bool, error) {
+	cacheKey := modelPath
+	if configPath != "" {
+		cacheKey = modelPath + "|" + configPath
+	}
+
+	// 先尝试从缓存获取
+	e.mu.RLock()
+	if cached, exists := e.modelCache[cacheKey]; exists {
+		e.mu.RUnlock()
+		e.logger.WithField("model", modelPath).Debug("Using cached model")
+		return cached, true, nil // true表示使用缓存
+	}
+	e.mu.RUnlock()
+
+	// 缓存未命中，加载模型
+	e.mu.Lock()
+	defer e.mu.Unlock()
+
+	// 双重检查（避免并发加载）
+	if cached, exists := e.modelCache[cacheKey]; exists {
+		e.logger.WithField("model", modelPath).Debug("Using cached model (double check)")
+		return cached, true, nil
+	}
+
+	e.logger.WithField("model", modelPath).Info("Loading model (cache miss)...")
+
+	var net gocv.Net
+	if configPath != "" {
+		net = gocv.ReadNet(modelPath, configPath)
+	} else {
+		net = gocv.ReadNet(modelPath, "")
+	}
+
+	if net.Empty() {
+		return nil, false, fmt.Errorf("failed to load model: %s", modelPath)
+	}
+
+	// 设置后端
+	net.SetPreferableBackend(gocv.NetBackendDefault)
+	net.SetPreferableTarget(gocv.NetTargetCPU)
+
+	// 缓存模型
+	e.modelCache[cacheKey] = &net
+
+	e.logger.WithField("model", modelPath).Info("Model loaded and cached")
+
+	return &net, true, nil
+}
+
+// getOrLoadCascade 获取或加载Cascade（带缓存）
+func (e *VisionExecutor) getOrLoadCascade(cascadePath string) (*gocv.CascadeClassifier, bool, error) {
+	// 先尝试从缓存获取
+	e.mu.RLock()
+	if cached, exists := e.cascadeCache[cascadePath]; exists {
+		e.mu.RUnlock()
+		e.logger.WithField("cascade", cascadePath).Debug("Using cached cascade")
+		return cached, true, nil
+	}
+	e.mu.RUnlock()
+
+	// 缓存未命中，加载分类器
+	e.mu.Lock()
+	defer e.mu.Unlock()
+
+	// 双重检查
+	if cached, exists := e.cascadeCache[cascadePath]; exists {
+		return cached, true, nil
+	}
+
+	e.logger.WithField("cascade", cascadePath).Info("Loading cascade (cache miss)...")
+
+	classifier := gocv.NewCascadeClassifier()
+	if !classifier.Load(cascadePath) {
+		return nil, false, fmt.Errorf("failed to load cascade: %s", cascadePath)
+	}
+
+	e.cascadeCache[cascadePath] = &classifier
+
+	e.logger.WithField("cascade", cascadePath).Info("Cascade loaded and cached")
+
+	return &classifier, true, nil
 }
 
 // Execute 执行Vision workload
@@ -171,21 +263,21 @@ func (e *VisionExecutor) executeFaceDetection(ctx context.Context, vw *workload.
 		}
 	}
 
-	classifier := gocv.NewCascadeClassifier()
-	defer classifier.Close()
-
-	if !classifier.Load(cascadePath) {
-		return fmt.Errorf("failed to load cascade classifier: %s", cascadePath)
+	// 使用缓存加载Cascade
+	classifier, useCached, err := e.getOrLoadCascade(cascadePath)
+	if err != nil {
+		return err
 	}
 
-	task.cascade = &classifier
+	// 注意：不要defer Close缓存的分类器！
+	task.useCachedNet = useCached
 
 	// 转换为灰度图
 	gray := gocv.NewMat()
 	defer gray.Close()
 	gocv.CvtColor(img, &gray, gocv.ColorBGRToGray)
 
-	// 检测人脸
+	// 检测人脸（使用缓存的分类器）
 	faces := classifier.DetectMultiScale(gray)
 
 	e.logger.WithField("faces", len(faces)).Info("Face detection completed")
@@ -241,20 +333,19 @@ func (e *VisionExecutor) executeClassification(ctx context.Context, vw *workload
 	}
 	defer img.Close()
 
-	// 加载DNN模型
-	net := gocv.ReadNet(vw.ModelPath, "")
-	if net.Empty() {
-		return fmt.Errorf("failed to load model: %s", vw.ModelPath)
+	// 使用缓存加载DNN模型
+	net, useCached, err := e.getOrLoadModel(vw.ModelPath, "")
+	if err != nil {
+		return err
 	}
-	defer net.Close()
 
-	task.net = &net
+	task.useCachedNet = useCached
 
 	// 预处理图像
 	blob := gocv.BlobFromImage(img, 1.0, image.Pt(224, 224), gocv.NewScalar(0, 0, 0, 0), false, false)
 	defer blob.Close()
 
-	// 设置输入并前向传播
+	// 设置输入并前向传播（使用缓存的网络）
 	net.SetInput(blob, "")
 	prob := net.Forward("")
 	defer prob.Close()
@@ -336,18 +427,13 @@ func (e *VisionExecutor) detectWithDNN(img gocv.Mat, vw *workload.VisionWorkload
 		}
 	}
 
-	// 加载DNN模型
-	net := gocv.ReadNet(vw.ModelPath, configPath)
-	if net.Empty() {
-		return nil, fmt.Errorf("failed to load DNN model from: %s", vw.ModelPath)
+	// 使用缓存加载DNN模型
+	net, useCached, err := e.getOrLoadModel(vw.ModelPath, configPath)
+	if err != nil {
+		return nil, err
 	}
-	defer net.Close()
 
-	task.net = &net
-
-	// 设置后端（优先使用CUDA，fallback到CPU）
-	net.SetPreferableBackend(gocv.NetBackendDefault)
-	net.SetPreferableTarget(gocv.NetTargetCPU)
+	task.useCachedNet = useCached
 
 	// 准备输入blob（根据模型调整尺寸）
 	inputSize := image.Pt(300, 300) // 默认
@@ -384,31 +470,23 @@ func (e *VisionExecutor) detectWithYOLO(img gocv.Mat, vw *workload.VisionWorkloa
 		return nil, fmt.Errorf("model_path is required for YOLO detection")
 	}
 
-	// 加载YOLO模型
-	// 支持 .weights + .cfg 或 .onnx 格式
-	var net gocv.Net
+	// 准备配置路径
 	configPath := vw.Config["config_path"]
 
-	if strings.HasSuffix(vw.ModelPath, ".onnx") || strings.HasSuffix(vw.ModelPath, ".pb") {
-		net = gocv.ReadNet(vw.ModelPath, "")
-	} else {
-		// Darknet格式（.weights + .cfg）
+	// Darknet格式需要配置文件
+	if !strings.HasSuffix(vw.ModelPath, ".onnx") && !strings.HasSuffix(vw.ModelPath, ".pb") {
 		if configPath == "" {
 			return nil, fmt.Errorf("config_path is required for Darknet YOLO models")
 		}
-		net = gocv.ReadNet(vw.ModelPath, configPath)
 	}
 
-	if net.Empty() {
-		return nil, fmt.Errorf("failed to load YOLO model")
+	// 使用缓存加载YOLO模型
+	net, useCached, err := e.getOrLoadModel(vw.ModelPath, configPath)
+	if err != nil {
+		return nil, err
 	}
-	defer net.Close()
 
-	task.net = &net
-
-	// 设置后端
-	net.SetPreferableBackend(gocv.NetBackendDefault)
-	net.SetPreferableTarget(gocv.NetTargetCPU)
+	task.useCachedNet = useCached
 
 	// 准备输入blob（YOLO通常使用416x416或608x608）
 	inputSize := 416
@@ -609,18 +687,13 @@ func (e *VisionExecutor) isVideoFile(path string) bool {
 
 // Stop 停止Vision workload
 func (e *VisionExecutor) Stop(ctx context.Context, w workload.Workload) error {
-	task, exists := e.tasks[w.GetID()]
+	_, exists := e.tasks[w.GetID()]
 	if !exists {
 		return fmt.Errorf("vision task not found: %s", w.GetID())
 	}
 
-	// 清理资源
-	if task.net != nil {
-		task.net.Close()
-	}
-	if task.cascade != nil {
-		task.cascade.Close()
-	}
+	// 注意：不要关闭缓存的模型！
+	// 模型会被多个任务共享，在executor销毁时统一释放
 
 	delete(e.tasks, w.GetID())
 	w.SetStatus(workload.StatusStopped)
@@ -628,6 +701,33 @@ func (e *VisionExecutor) Stop(ctx context.Context, w workload.Workload) error {
 	e.logger.WithField("workload_id", w.GetID()).Info("Vision task stopped")
 
 	return nil
+}
+
+// Cleanup 清理所有缓存的模型（在executor销毁时调用）
+func (e *VisionExecutor) Cleanup() {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+
+	// 关闭所有缓存的DNN模型
+	for path, net := range e.modelCache {
+		if net != nil {
+			net.Close()
+			e.logger.WithField("model", path).Info("Model cache released")
+		}
+	}
+
+	// 关闭所有缓存的Cascade分类器
+	for path, cascade := range e.cascadeCache {
+		if cascade != nil {
+			cascade.Close()
+			e.logger.WithField("cascade", path).Info("Cascade cache released")
+		}
+	}
+
+	e.modelCache = make(map[string]*gocv.Net)
+	e.cascadeCache = make(map[string]*gocv.CascadeClassifier)
+
+	e.logger.Info("All vision models released from cache")
 }
 
 // GetLogs 获取Vision workload日志
