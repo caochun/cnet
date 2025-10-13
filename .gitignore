@@ -218,3 +218,4 @@ local/
 test_images/
 test_output/
 *.log
+models/

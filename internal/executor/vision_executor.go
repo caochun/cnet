@@ -610,9 +610,14 @@ func (e *VisionExecutor) parseYOLOOutput(outputs []gocv.Mat, width, height int, 
 		}
 	}
 
+	// 如果没有检测结果，直接返回空数组
+	if len(boxes) == 0 {
+		return []map[string]interface{}{}
+	}
+	
 	// NMS（非极大值抑制）
 	indices := gocv.NMSBoxes(boxes, confidences, confidence, nmsThreshold)
-
+	
 	var results []map[string]interface{}
 	for _, idx := range indices {
 		box := boxes[idx]
@@ -628,7 +633,7 @@ func (e *VisionExecutor) parseYOLOOutput(outputs []gocv.Mat, width, height int, 
 			},
 		})
 	}
-
+	
 	return results
 }
 
