@@ -42,28 +42,28 @@ func (e *VisionExecutor) Execute(ctx context.Context, w workload.Workload) error
 	if !ok {
 		return fmt.Errorf("invalid workload type, expected VisionWorkload")
 	}
-	
+
 	e.logger.WithFields(logrus.Fields{
 		"workload_id": w.GetID(),
 		"task":        vw.Task,
 		"input":       vw.InputPath,
 		"model_type":  vw.ModelType,
 	}).Info("Starting vision task")
-	
+
 	vw.SetStatus(workload.StatusRunning)
-	
+
 	// 创建任务记录
 	task := &visionTask{
 		workload: vw,
 	}
 	e.tasks[w.GetID()] = task
-	
+
 	// 验证输入文件
 	if _, err := os.Stat(vw.InputPath); os.IsNotExist(err) {
 		vw.SetStatus(workload.StatusFailed)
 		return fmt.Errorf("input file not found: %s", vw.InputPath)
 	}
-	
+
 	// 根据任务类型执行
 	var err error
 	switch vw.Task {
@@ -78,16 +78,16 @@ func (e *VisionExecutor) Execute(ctx context.Context, w workload.Workload) error
 	default:
 		err = fmt.Errorf("unsupported task type: %s", vw.Task)
 	}
-	
+
 	if err != nil {
 		vw.SetStatus(workload.StatusFailed)
 		e.logger.WithError(err).Error("Vision task failed")
 		return err
 	}
-	
+
 	vw.SetStatus(workload.StatusCompleted)
 	e.logger.WithField("workload_id", w.GetID()).Info("Vision task completed")
-	
+
 	return nil
 }
 
@@ -99,15 +99,15 @@ func (e *VisionExecutor) executeDetection(ctx context.Context, vw *workload.Visi
 		return fmt.Errorf("failed to read image: %s", vw.InputPath)
 	}
 	defer img.Close()
-	
+
 	e.logger.WithFields(logrus.Fields{
 		"width":  img.Cols(),
 		"height": img.Rows(),
 	}).Info("Image loaded")
-	
+
 	var results []map[string]interface{}
 	var err error
-	
+
 	// 根据模型类型执行检测
 	switch vw.ModelType {
 	case workload.ModelDNN:
@@ -117,15 +117,15 @@ func (e *VisionExecutor) executeDetection(ctx context.Context, vw *workload.Visi
 	default:
 		return fmt.Errorf("unsupported model type for detection: %s (支持: dnn, yolo)", vw.ModelType)
 	}
-	
+
 	if err != nil {
 		return err
 	}
-	
+
 	// 保存结果
 	vw.Results = results
 	task.results = results
-	
+
 	// 如果指定了输出路径，保存标注后的图像
 	if vw.OutputPath != "" {
 		if err := e.saveAnnotatedImage(img, results, vw.OutputPath); err != nil {
@@ -134,9 +134,9 @@ func (e *VisionExecutor) executeDetection(ctx context.Context, vw *workload.Visi
 			e.logger.WithField("output", vw.OutputPath).Info("Annotated image saved")
 		}
 	}
-	
+
 	e.logger.WithField("detections", len(results)).Info("Detection completed")
-	
+
 	return nil
 }
 
@@ -148,7 +148,7 @@ func (e *VisionExecutor) executeFaceDetection(ctx context.Context, vw *workload.
 		return fmt.Errorf("failed to read image: %s", vw.InputPath)
 	}
 	defer img.Close()
-	
+
 	// 加载Haar级联分类器
 	cascadePath := vw.ModelPath
 	if cascadePath == "" {
@@ -158,38 +158,38 @@ func (e *VisionExecutor) executeFaceDetection(ctx context.Context, vw *workload.
 			"/opt/homebrew/share/opencv4/haarcascades/haarcascade_frontalface_default.xml",
 			"/usr/share/opencv4/haarcascades/haarcascade_frontalface_default.xml",
 		}
-		
+
 		for _, path := range possiblePaths {
 			if _, err := os.Stat(path); err == nil {
 				cascadePath = path
 				break
 			}
 		}
-		
+
 		if cascadePath == "" {
 			return fmt.Errorf("cascade model not found, please specify model_path")
 		}
 	}
-	
+
 	classifier := gocv.NewCascadeClassifier()
 	defer classifier.Close()
-	
+
 	if !classifier.Load(cascadePath) {
 		return fmt.Errorf("failed to load cascade classifier: %s", cascadePath)
 	}
-	
+
 	task.cascade = &classifier
-	
+
 	// 转换为灰度图
 	gray := gocv.NewMat()
 	defer gray.Close()
 	gocv.CvtColor(img, &gray, gocv.ColorBGRToGray)
-	
+
 	// 检测人脸
 	faces := classifier.DetectMultiScale(gray)
-	
+
 	e.logger.WithField("faces", len(faces)).Info("Face detection completed")
-	
+
 	// 转换结果
 	var results []map[string]interface{}
 	for i, face := range faces {
@@ -204,19 +204,19 @@ func (e *VisionExecutor) executeFaceDetection(ctx context.Context, vw *workload.
 				"height": face.Dy(),
 			},
 		})
-		
+
 		// 在图像上绘制矩形框
 		gocv.Rectangle(&img, face, color.RGBA{0, 255, 0, 0}, 3)
-		
+
 		// 添加标签
 		label := fmt.Sprintf("Face #%d", i+1)
 		gocv.PutText(&img, label, image.Pt(face.Min.X, face.Min.Y-10),
 			gocv.FontHersheyPlain, 1.5, color.RGBA{0, 255, 0, 0}, 2)
 	}
-	
+
 	vw.Results = results
 	task.results = results
-	
+
 	// 保存结果图像
 	if vw.OutputPath != "" {
 		if ok := gocv.IMWrite(vw.OutputPath, img); !ok {
@@ -224,7 +224,7 @@ func (e *VisionExecutor) executeFaceDetection(ctx context.Context, vw *workload.
 		}
 		e.logger.WithField("output", vw.OutputPath).Info("Annotated image saved")
 	}
-	
+
 	return nil
 }
 
@@ -233,49 +233,49 @@ func (e *VisionExecutor) executeClassification(ctx context.Context, vw *workload
 	if vw.ModelPath == "" {
 		return fmt.Errorf("model_path is required for classification")
 	}
-	
+
 	// 读取图像
 	img := gocv.IMRead(vw.InputPath, gocv.IMReadColor)
 	if img.Empty() {
 		return fmt.Errorf("failed to read image: %s", vw.InputPath)
 	}
 	defer img.Close()
-	
+
 	// 加载DNN模型
 	net := gocv.ReadNet(vw.ModelPath, "")
 	if net.Empty() {
 		return fmt.Errorf("failed to load model: %s", vw.ModelPath)
 	}
 	defer net.Close()
-	
+
 	task.net = &net
-	
+
 	// 预处理图像
 	blob := gocv.BlobFromImage(img, 1.0, image.Pt(224, 224), gocv.NewScalar(0, 0, 0, 0), false, false)
 	defer blob.Close()
-	
+
 	// 设置输入并前向传播
 	net.SetInput(blob, "")
 	prob := net.Forward("")
 	defer prob.Close()
-	
+
 	// 获取分类结果
 	_, maxVal, _, maxLoc := gocv.MinMaxLoc(prob)
-	
+
 	results := map[string]interface{}{
 		"class_id":   maxLoc.X,
 		"confidence": maxVal,
 		"input":      vw.InputPath,
 	}
-	
+
 	vw.Results = results
 	task.results = results
-	
+
 	e.logger.WithFields(logrus.Fields{
 		"class_id":   maxLoc.X,
 		"confidence": maxVal,
 	}).Info("Classification completed")
-	
+
 	return nil
 }
 
@@ -285,23 +285,23 @@ func (e *VisionExecutor) executeTracking(ctx context.Context, vw *workload.Visio
 	if !e.isVideoFile(vw.InputPath) {
 		return fmt.Errorf("tracking requires video input")
 	}
-	
+
 	// 打开视频
 	video, err := gocv.OpenVideoCapture(vw.InputPath)
 	if err != nil {
 		return fmt.Errorf("failed to open video: %w", err)
 	}
 	defer video.Close()
-	
+
 	// 获取视频信息
 	fps := video.Get(gocv.VideoCaptureFPS)
 	frameCount := int(video.Get(gocv.VideoCaptureFrameCount))
-	
+
 	e.logger.WithFields(logrus.Fields{
 		"fps":         fps,
 		"frame_count": frameCount,
 	}).Info("Video opened")
-	
+
 	// 简化实现：只返回视频信息
 	// 完整的跟踪功能需要更新版本的GoCV或自定义实现
 	vw.Results = map[string]interface{}{
@@ -310,9 +310,9 @@ func (e *VisionExecutor) executeTracking(ctx context.Context, vw *workload.Visio
 		"note":         "目标跟踪功能需要GoCV tracker模块支持",
 	}
 	task.results = vw.Results
-	
+
 	e.logger.Info("Video info extracted (tracking not fully implemented)")
-	
+
 	return nil
 }
 
@@ -321,7 +321,7 @@ func (e *VisionExecutor) detectWithDNN(img gocv.Mat, vw *workload.VisionWorkload
 	if vw.ModelPath == "" {
 		return nil, fmt.Errorf("model_path is required for DNN detection")
 	}
-	
+
 	// 检查是否有配置文件
 	configPath := vw.Config["config_path"]
 	if configPath == "" {
@@ -335,20 +335,20 @@ func (e *VisionExecutor) detectWithDNN(img gocv.Mat, vw *workload.VisionWorkload
 			}
 		}
 	}
-	
+
 	// 加载DNN模型
 	net := gocv.ReadNet(vw.ModelPath, configPath)
 	if net.Empty() {
 		return nil, fmt.Errorf("failed to load DNN model from: %s", vw.ModelPath)
 	}
 	defer net.Close()
-	
+
 	task.net = &net
-	
+
 	// 设置后端（优先使用CUDA，fallback到CPU）
 	net.SetPreferableBackend(gocv.NetBackendDefault)
 	net.SetPreferableTarget(gocv.NetTargetCPU)
-	
+
 	// 准备输入blob（根据模型调整尺寸）
 	inputSize := image.Pt(300, 300) // 默认
 	if size, ok := vw.Config["input_size"]; ok {
@@ -358,23 +358,23 @@ func (e *VisionExecutor) detectWithDNN(img gocv.Mat, vw *workload.VisionWorkload
 			inputSize = image.Pt(w, h)
 		}
 	}
-	
-	blob := gocv.BlobFromImage(img, 1.0/255.0, inputSize, 
+
+	blob := gocv.BlobFromImage(img, 1.0/255.0, inputSize,
 		gocv.NewScalar(0, 0, 0, 0), true, false)
 	defer blob.Close()
-	
+
 	// 设置输入
 	net.SetInput(blob, "")
-	
+
 	// 前向传播
 	prob := net.Forward("")
 	defer prob.Close()
-	
+
 	// 解析检测结果
 	results := e.parseDNNOutput(prob, img.Cols(), img.Rows(), vw.Confidence)
-	
+
 	e.logger.WithField("detections", len(results)).Info("DNN detection completed")
-	
+
 	return results, nil
 }
 
@@ -383,12 +383,12 @@ func (e *VisionExecutor) detectWithYOLO(img gocv.Mat, vw *workload.VisionWorkloa
 	if vw.ModelPath == "" {
 		return nil, fmt.Errorf("model_path is required for YOLO detection")
 	}
-	
+
 	// 加载YOLO模型
 	// 支持 .weights + .cfg 或 .onnx 格式
 	var net gocv.Net
 	configPath := vw.Config["config_path"]
-	
+
 	if strings.HasSuffix(vw.ModelPath, ".onnx") || strings.HasSuffix(vw.ModelPath, ".pb") {
 		net = gocv.ReadNet(vw.ModelPath, "")
 	} else {
@@ -398,38 +398,38 @@ func (e *VisionExecutor) detectWithYOLO(img gocv.Mat, vw *workload.VisionWorkloa
 		}
 		net = gocv.ReadNet(vw.ModelPath, configPath)
 	}
-	
+
 	if net.Empty() {
 		return nil, fmt.Errorf("failed to load YOLO model")
 	}
 	defer net.Close()
-	
+
 	task.net = &net
-	
+
 	// 设置后端
 	net.SetPreferableBackend(gocv.NetBackendDefault)
 	net.SetPreferableTarget(gocv.NetTargetCPU)
-	
+
 	// 准备输入blob（YOLO通常使用416x416或608x608）
 	inputSize := 416
 	if size, ok := vw.Config["input_size"]; ok {
 		fmt.Sscanf(size, "%d", &inputSize)
 	}
-	
+
 	blob := gocv.BlobFromImage(img, 1.0/255.0, image.Pt(inputSize, inputSize),
 		gocv.NewScalar(0, 0, 0, 0), true, false)
 	defer blob.Close()
-	
+
 	// 设置输入
 	net.SetInput(blob, "")
-	
+
 	// 获取输出层名称
 	layerNames := net.GetLayerNames()
 	outLayers := []string{}
 	for _, name := range layerNames {
 		outLayers = append(outLayers, name)
 	}
-	
+
 	// 如果没有输出层，使用默认前向传播
 	var probs []gocv.Mat
 	if len(outLayers) == 0 {
@@ -445,25 +445,25 @@ func (e *VisionExecutor) detectWithYOLO(img gocv.Mat, vw *workload.VisionWorkloa
 			prob.Close()
 		}
 	}()
-	
+
 	// 解析YOLO输出
 	results := e.parseYOLOOutput(probs, img.Cols(), img.Rows(), vw.Confidence, vw.NMSThreshold)
-	
+
 	e.logger.WithField("detections", len(results)).Info("YOLO detection completed")
-	
+
 	return results, nil
 }
 
 // parseDNNOutput 解析DNN输出
 func (e *VisionExecutor) parseDNNOutput(output gocv.Mat, width, height int, confidence float32) []map[string]interface{} {
 	var results []map[string]interface{}
-	
+
 	// 标准的SSD输出格式：[1, 1, N, 7]
 	// 每个检测：[image_id, class_id, confidence, x_min, y_min, x_max, y_max]
 	if output.Total() == 0 {
 		return results
 	}
-	
+
 	for i := 0; i < output.Rows(); i++ {
 		conf := output.GetFloatAt(i, 2)
 		if conf > confidence {
@@ -472,7 +472,7 @@ func (e *VisionExecutor) parseDNNOutput(output gocv.Mat, width, height int, conf
 			yMin := int(output.GetFloatAt(i, 4) * float32(height))
 			xMax := int(output.GetFloatAt(i, 5) * float32(width))
 			yMax := int(output.GetFloatAt(i, 6) * float32(height))
-			
+
 			results = append(results, map[string]interface{}{
 				"class_id":   classID,
 				"class":      fmt.Sprintf("class_%d", classID),
@@ -486,7 +486,7 @@ func (e *VisionExecutor) parseDNNOutput(output gocv.Mat, width, height int, conf
 			})
 		}
 	}
-	
+
 	return results
 }
 
@@ -495,18 +495,18 @@ func (e *VisionExecutor) parseYOLOOutput(outputs []gocv.Mat, width, height int, 
 	var classIDs []int
 	var confidences []float32
 	var boxes []image.Rectangle
-	
+
 	// 遍历所有输出层
 	for _, output := range outputs {
 		for i := 0; i < output.Rows(); i++ {
 			// YOLO输出格式：[center_x, center_y, width, height, objectness, class_scores...]
 			objectness := output.GetFloatAt(i, 4)
-			
+
 			if objectness > confidence {
 				// 找到最高分类分数
 				var maxScore float32
 				var maxClassID int
-				
+
 				for j := 5; j < output.Cols(); j++ {
 					score := output.GetFloatAt(i, j) * objectness
 					if score > maxScore {
@@ -514,16 +514,16 @@ func (e *VisionExecutor) parseYOLOOutput(outputs []gocv.Mat, width, height int, 
 						maxClassID = j - 5
 					}
 				}
-				
+
 				if maxScore > confidence {
 					centerX := int(output.GetFloatAt(i, 0) * float32(width))
 					centerY := int(output.GetFloatAt(i, 1) * float32(height))
 					w := int(output.GetFloatAt(i, 2) * float32(width))
 					h := int(output.GetFloatAt(i, 3) * float32(height))
-					
+
 					x := centerX - w/2
 					y := centerY - h/2
-					
+
 					classIDs = append(classIDs, maxClassID)
 					confidences = append(confidences, maxScore)
 					boxes = append(boxes, image.Rect(x, y, x+w, y+h))
@@ -531,10 +531,10 @@ func (e *VisionExecutor) parseYOLOOutput(outputs []gocv.Mat, width, height int, 
 			}
 		}
 	}
-	
+
 	// NMS（非极大值抑制）
 	indices := gocv.NMSBoxes(boxes, confidences, confidence, nmsThreshold)
-	
+
 	var results []map[string]interface{}
 	for _, idx := range indices {
 		box := boxes[idx]
@@ -550,7 +550,7 @@ func (e *VisionExecutor) parseYOLOOutput(outputs []gocv.Mat, width, height int, 
 			},
 		})
 	}
-	
+
 	return results
 }
 
@@ -561,7 +561,7 @@ func (e *VisionExecutor) saveAnnotatedImage(img gocv.Mat, results []map[string]i
 	if err := os.MkdirAll(dir, 0755); err != nil {
 		return fmt.Errorf("failed to create output directory: %w", err)
 	}
-	
+
 	// 在图像上绘制检测框
 	for _, result := range results {
 		if bbox, ok := result["bbox"].(map[string]int); ok {
@@ -569,10 +569,10 @@ func (e *VisionExecutor) saveAnnotatedImage(img gocv.Mat, results []map[string]i
 			y := bbox["y"]
 			w := bbox["width"]
 			h := bbox["height"]
-			
+
 			rect := image.Rect(x, y, x+w, y+h)
 			gocv.Rectangle(&img, rect, color.RGBA{0, 255, 0, 0}, 2)
-			
+
 			// 添加标签
 			label := "object"
 			if class, ok := result["class"].(string); ok {
@@ -581,17 +581,17 @@ func (e *VisionExecutor) saveAnnotatedImage(img gocv.Mat, results []map[string]i
 			if conf, ok := result["confidence"].(float32); ok {
 				label = fmt.Sprintf("%s: %.2f", label, conf)
 			}
-			
+
 			gocv.PutText(&img, label, image.Pt(x, y-10),
 				gocv.FontHersheyPlain, 1.2, color.RGBA{0, 255, 0, 0}, 2)
 		}
 	}
-	
+
 	// 保存图像
 	if ok := gocv.IMWrite(outputPath, img); !ok {
 		return fmt.Errorf("failed to write image: %s", outputPath)
 	}
-	
+
 	return nil
 }
 
@@ -613,7 +613,7 @@ func (e *VisionExecutor) Stop(ctx context.Context, w workload.Workload) error {
 	if !exists {
 		return fmt.Errorf("vision task not found: %s", w.GetID())
 	}
-	
+
 	// 清理资源
 	if task.net != nil {
 		task.net.Close()
@@ -621,12 +621,12 @@ func (e *VisionExecutor) Stop(ctx context.Context, w workload.Workload) error {
 	if task.cascade != nil {
 		task.cascade.Close()
 	}
-	
+
 	delete(e.tasks, w.GetID())
 	w.SetStatus(workload.StatusStopped)
-	
+
 	e.logger.WithField("workload_id", w.GetID()).Info("Vision task stopped")
-	
+
 	return nil
 }
 
@@ -636,7 +636,7 @@ func (e *VisionExecutor) GetLogs(ctx context.Context, w workload.Workload, lines
 	if !ok {
 		return nil, fmt.Errorf("invalid workload type")
 	}
-	
+
 	logs := []string{
 		"=== Vision Task Logs ===",
 		fmt.Sprintf("Task Type: %s", vw.Task),
@@ -647,11 +647,11 @@ func (e *VisionExecutor) GetLogs(ctx context.Context, w workload.Workload, lines
 		fmt.Sprintf("NMS Threshold: %.2f", vw.NMSThreshold),
 		fmt.Sprintf("Status: %s", vw.GetStatus()),
 	}
-	
+
 	if vw.Results != nil {
 		logs = append(logs, fmt.Sprintf("Results: %+v", vw.Results))
 	}
-	
+
 	return logs, nil
 }
 

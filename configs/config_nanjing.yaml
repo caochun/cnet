@@ -6,10 +6,10 @@ agent:
   port: 8081
 
 resources:
-  cpu: 4.0
-  gpu: 0
-  memory: 8589934592     # 8GB
-  storage: 107374182400  # 100GB
+  cpu: 8.0               # 充足的CPU资源
+  gpu: 1                 # 有GPU
+  memory: 17179869184    # 16GB，充足的内存
+  storage: 214748364800  # 200GB
 
 # 注册到父节点
 parent:

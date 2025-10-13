@@ -6,10 +6,10 @@ agent:
   port: 8080
 
 resources:
-  cpu: 8.0
-  gpu: 1
-  memory: 17179869184    # 16GB
-  storage: 214748364800  # 200GB
+  cpu: 0.5               # 很少的CPU，故意不足
+  gpu: 0
+  memory: 536870912      # 512MB，资源不足
+  storage: 10737418240   # 10GB
 
 parent:
   enabled: false

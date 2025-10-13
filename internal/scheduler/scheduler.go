@@ -112,35 +112,7 @@ func (s *Scheduler) ExecuteLocal(ctx context.Context, w workload.Workload) error
 	return nil
 }
 
-// DelegateToChild 委托给下级节点
-func (s *Scheduler) DelegateToChild(ctx context.Context, w workload.Workload, nodeID string) error {
-	// TODO: 实现向下级节点委托的逻辑
-	// 1. 找到目标节点的地址
-	// 2. 通过HTTP/gRPC发送workload
-	// 3. 等待确认
-
-	s.logger.WithFields(logrus.Fields{
-		"workload_id": w.GetID(),
-		"target_node": nodeID,
-	}).Info("Delegating workload to child node (not implemented)")
-
-	return fmt.Errorf("delegation to child not implemented yet")
-}
-
-// DelegateToPeer 委托给同级节点
-func (s *Scheduler) DelegateToPeer(ctx context.Context, w workload.Workload, nodeID string) error {
-	// TODO: 实现向同级节点委托的逻辑
-	// 1. 找到目标节点的地址
-	// 2. 通过HTTP/gRPC发送workload
-	// 3. 等待确认
-
-	s.logger.WithFields(logrus.Fields{
-		"workload_id": w.GetID(),
-		"target_node": nodeID,
-	}).Info("Delegating workload to peer node (not implemented)")
-
-	return fmt.Errorf("delegation to peer not implemented yet")
-}
+// DelegateToChild 和 DelegateToPeer 的实现已移到 delegate.go
 
 // StopWorkload 停止workload
 func (s *Scheduler) StopWorkload(ctx context.Context, workloadID string) error {

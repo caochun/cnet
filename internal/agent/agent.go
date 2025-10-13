@@ -79,7 +79,13 @@ func NewAgent(config *AgentConfig, logger *logrus.Logger) (*Agent, error) {
 
 	// 创建父节点连接器（如果启用）
 	if config.ParentEnabled && config.ParentAddr != "" {
-		agent.parentConn = discovery.NewParentConnector(logger, reg, config.ParentAddr, config.NodeID)
+		// 构造本节点地址 (address:port)
+		nodeAddr := fmt.Sprintf("%s:%d", config.Address, config.Port)
+		// 如果address是0.0.0.0或空，使用localhost
+		if config.Address == "0.0.0.0" || config.Address == "" {
+			nodeAddr = fmt.Sprintf("localhost:%d", config.Port)
+		}
+		agent.parentConn = discovery.NewParentConnector(logger, reg, config.ParentAddr, config.NodeID, nodeAddr)
 	}
 
 	// 创建Peer发现（如果启用）

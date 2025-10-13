@@ -15,24 +15,26 @@ import (
 
 // ParentConnector 父节点连接器
 type ParentConnector struct {
-	logger     *logrus.Logger
-	register   *register.Register
-	parentAddr string
-	nodeID     string
-	ctx        context.Context
-	cancel     context.CancelFunc
-	httpClient *http.Client
+	logger       *logrus.Logger
+	register     *register.Register
+	parentAddr   string
+	nodeID       string
+	nodeAddr     string  // 本节点的地址
+	ctx          context.Context
+	cancel       context.CancelFunc
+	httpClient   *http.Client
 }
 
 // NewParentConnector 创建父节点连接器
-func NewParentConnector(logger *logrus.Logger, reg *register.Register, parentAddr, nodeID string) *ParentConnector {
+func NewParentConnector(logger *logrus.Logger, reg *register.Register, parentAddr, nodeID, nodeAddr string) *ParentConnector {
 	ctx, cancel := context.WithCancel(context.Background())
-
+	
 	return &ParentConnector{
 		logger:     logger,
 		register:   reg,
 		parentAddr: parentAddr,
 		nodeID:     nodeID,
+		nodeAddr:   nodeAddr,
 		ctx:        ctx,
 		cancel:     cancel,
 		httpClient: &http.Client{
@@ -47,24 +49,24 @@ func (c *ParentConnector) Start() error {
 	if err := c.registerToParent(); err != nil {
 		return fmt.Errorf("failed to register to parent: %w", err)
 	}
-
+	
 	// 启动心跳
 	go c.heartbeatLoop()
-
+	
 	c.logger.WithField("parent_addr", c.parentAddr).Info("Parent connector started")
-
+	
 	return nil
 }
 
 // Stop 停止父节点连接
 func (c *ParentConnector) Stop() error {
 	c.cancel()
-
+	
 	// 从父节点注销
 	if err := c.unregisterFromParent(); err != nil {
 		c.logger.WithError(err).Warn("Failed to unregister from parent")
 	}
-
+	
 	c.logger.Info("Parent connector stopped")
 	return nil
 }
@@ -72,7 +74,10 @@ func (c *ParentConnector) Stop() error {
 // registerToParent 注册到父节点
 func (c *ParentConnector) registerToParent() error {
 	localRes := c.register.GetLocalResources()
-
+	
+	// 设置本节点的地址，让父节点知道如何委托任务过来
+	localRes.Address = c.nodeAddr
+	
 	// 构造注册请求
 	reqBody := map[string]interface{}{
 		"node_id":   c.nodeID,
@@ -147,6 +152,7 @@ func (c *ParentConnector) heartbeatLoop() {
 // sendHeartbeat 发送心跳
 func (c *ParentConnector) sendHeartbeat() error {
 	localRes := c.register.GetLocalResources()
+	localRes.Address = c.nodeAddr
 
 	reqBody := map[string]interface{}{
 		"node_id":   c.nodeID,
