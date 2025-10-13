@@ -215,3 +215,6 @@ local/
 
 # Application specific
 # Add any application-specific files here
+test_images/
+test_output/
+*.log
