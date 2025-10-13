@@ -1,7 +1,7 @@
-# Peer节点1配置示例
+# 宿迁市节点配置
 
 agent:
-  node_id: "peer-agent-1"
+  node_id: "suqian"
   address: "0.0.0.0"
   port: 8082
 
@@ -18,6 +18,7 @@ parent:
 peers:
   enabled: true
   addresses:
+    - "localhost:8081"  # child-agent-1
     - "localhost:8083"  # peer-agent-2
 
 logging:

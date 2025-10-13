@@ -1,0 +1,27 @@
+# 常州市节点配置
+
+agent:
+  node_id: "changzhou"
+  address: "0.0.0.0"
+  port: 8083
+
+resources:
+  cpu: 4.0
+  gpu: 0
+  memory: 8589934592     # 8GB
+  storage: 107374182400  # 100GB
+
+parent:
+  enabled: false
+
+# 配置peer节点
+peers:
+  enabled: true
+  addresses:
+    - "localhost:8081"  # child-agent-1
+    - "localhost:8082"  # peer-agent-1
+
+logging:
+  level: "info"
+  format: "text"
+

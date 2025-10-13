@@ -1,9 +1,9 @@
-# Peer节点2配置示例
+# 南京市节点配置
 
 agent:
-  node_id: "peer-agent-2"
+  node_id: "nanjing"
   address: "0.0.0.0"
-  port: 8083
+  port: 8081
 
 resources:
   cpu: 4.0
@@ -11,14 +11,17 @@ resources:
   memory: 8589934592     # 8GB
   storage: 107374182400  # 100GB
 
+# 注册到父节点
 parent:
-  enabled: false
+  enabled: true
+  address: "localhost:8080"
 
 # 配置peer节点
 peers:
   enabled: true
   addresses:
     - "localhost:8082"  # peer-agent-1
+    - "localhost:8083"  # peer-agent-2
 
 logging:
   level: "info"

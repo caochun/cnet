@@ -59,6 +59,7 @@ func NewAgent(config *AgentConfig, logger *logrus.Logger) (*Agent, error) {
 	execFactory.Register(workload.TypeProcess, executor.NewProcessExecutor(logger))
 	execFactory.Register(workload.TypeContainer, executor.NewContainerExecutor(logger))
 	execFactory.Register(workload.TypeMLModel, executor.NewMLModelExecutor(logger))
+	execFactory.Register(workload.TypeVision, executor.NewVisionExecutor(logger))
 
 	// 创建Scheduler
 	sched := scheduler.NewScheduler(logger, reg, execFactory)

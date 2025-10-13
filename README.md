@@ -9,7 +9,7 @@ CNET Agent 是一个分布式资源管理和任务调度系统。
 1. **Register（资源注册器）**
    - 管理本地资源（CPU、GPU、Memory、Storage）
    - 维护下级节点的资源信息（树状结构）
-   - 维护同级peer节点的资源信息
+   - 维护同级节点的资源信息
    - 提供资源分配和释放功能
 
 2. **Scheduler（调度器）**
@@ -30,14 +30,14 @@ CNET Agent 是一个分布式资源管理和任务调度系统。
 
 1. **层次化架构（Hierarchical）**
 ```
-Parent Agent
-└── Child Agent 1
-    └── Child Agent 2
+上级节点
+└── 下级节点1
+    └── 下级节点2
 ```
 
 2. **对等架构（P2P）**
 ```
-Peer Agent 1 ←→ Peer Agent 2 ←→ Peer Agent 3
+节点A ←→ 节点B ←→ 节点C
 ```
 
 可以混合使用两种架构。
@@ -72,21 +72,21 @@ go build -o bin/cnet-agent main.go
 ### 3. 层次化集群
 
 ```bash
-# 终端1: 启动父节点
-./bin/cnet-agent -config configs/config_parent.yaml
+# 终端1: 启动江苏省节点
+./bin/cnet-agent -config configs/config_jiangsu.yaml
 
-# 终端2: 启动子节点
-./bin/cnet-agent -config configs/config_child.yaml
+# 终端2: 启动南京市节点
+./bin/cnet-agent -config configs/config_nanjing.yaml
 ```
 
 ### 4. P2P集群
 
 ```bash
-# 终端1: 启动peer1
-./bin/cnet-agent -config configs/config_peer1.yaml
+# 终端1: 启动宿迁市节点
+./bin/cnet-agent -config configs/config_suqian.yaml
 
-# 终端2: 启动peer2
-./bin/cnet-agent -config configs/config_peer2.yaml
+# 终端2: 启动常州市节点
+./bin/cnet-agent -config configs/config_changzhou.yaml
 ```
 
 ## API使用
@@ -191,7 +191,7 @@ curl http://localhost:8080/api/resources
 # 资源统计
 curl http://localhost:8080/api/resources/stats
 
-# 所有节点（包括child和peer）
+# 所有节点（包括下级和同级）
 curl http://localhost:8080/api/nodes
 ```
 
@@ -207,8 +207,8 @@ curl http://localhost:8080/api/health
 
 优先级顺序：
 1. 本地资源
-2. 下级（child）节点
-3. 同级（peer）节点
+2. 下级节点
+3. 同级节点
 
 ### 最佳适配策略（BestFitStrategy）
 

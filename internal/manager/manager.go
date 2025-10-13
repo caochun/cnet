@@ -70,6 +70,13 @@ func (m *Manager) SubmitWorkload(ctx context.Context, req *workload.CreateWorklo
 		}
 		w = workload.NewMLModelWorkload(req.Name, modelPath, *req)
 
+	case workload.TypeVision:
+		inputPath, ok := req.Config["input_path"].(string)
+		if !ok {
+			return nil, fmt.Errorf("input_path is required for vision workload")
+		}
+		w = workload.NewVisionWorkload(req.Name, inputPath, *req)
+
 	default:
 		return nil, fmt.Errorf("unsupported workload type: %s", req.Type)
 	}

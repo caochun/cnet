@@ -1,7 +1,7 @@
-# 父节点配置示例
+# 江苏省节点配置
 
 agent:
-  node_id: "parent-agent"
+  node_id: "jiangsu"
   address: "0.0.0.0"
   port: 8080
 
