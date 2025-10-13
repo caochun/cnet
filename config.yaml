@@ -1,48 +1,32 @@
-# CNET Agent Configuration
+# CNET Agent 配置文件
 
+# Agent基础配置
 agent:
+  node_id: "agent-1"
   address: "0.0.0.0"
   port: 8080
-  node_id: "discovery-server"
-  node_name: "Discovery Server"
-  region: "default"
-  datacenter: "dc1"
-  heartbeat: "30s"
 
+# 本地资源配置
+resources:
+  cpu: 4.0          # CPU核心数
+  gpu: 0            # GPU数量
+  memory: 8589934592    # 8GB 内存（字节）
+  storage: 107374182400 # 100GB 存储（字节）
+
+# 父节点配置（层次化架构）
+parent:
+  enabled: false
+  address: "parent-agent:8080"
+
+# Peer节点配置（对等架构）
+peers:
+  enabled: false
+  addresses:
+    - "peer-1:8080"
+    - "peer-2:8080"
+
+# 日志配置
 logging:
   level: "info"  # debug, info, warn, error
-  format: "json"  # json, text
+  format: "json" # json, text
 
-discovery:
-  enabled: true  # Enable discovery for root server
-  servers: []  # No discovery servers for root node
-  timeout: "5s"
-  retry: 3
-
-resources:
-  cpu: true
-  memory: true
-  disk: true
-  network: true
-  interval: "10s"
-
-tasks:
-  max_concurrent: 10
-  timeout: "5m"
-  cleanup: true
-
-ml:
-  enabled: true
-  engines: ["python", "tensorflow", "pytorch"]
-  default_engine: "python"
-  model_path: "./models"
-  script_path: "./examples/ml_models"
-  port_range:
-    start: 9000
-    end: 9100
-  resource_limits:
-    cpu_limit: 1.0
-    memory_limit: 536870912  # 512MB
-    disk_limit: 1073741824   # 1GB
-    gpu_limit: 0
-  timeout: "30s"

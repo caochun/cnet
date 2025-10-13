@@ -1,0 +1,26 @@
+# Peer节点1配置示例
+
+agent:
+  node_id: "peer-agent-1"
+  address: "0.0.0.0"
+  port: 8082
+
+resources:
+  cpu: 4.0
+  gpu: 0
+  memory: 8589934592     # 8GB
+  storage: 107374182400  # 100GB
+
+parent:
+  enabled: false
+
+# 配置peer节点
+peers:
+  enabled: true
+  addresses:
+    - "localhost:8083"  # peer-agent-2
+
+logging:
+  level: "info"
+  format: "text"
+

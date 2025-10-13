@@ -118,7 +118,6 @@ temp/
 
 # CNET Agent specific files
 # Configuration files with sensitive data
-# Note: config_agent1.yaml and config_agent2.yaml are kept for multi-agent demo
 config_with_discovery.yaml
 
 # Log files

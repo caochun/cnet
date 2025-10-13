@@ -1,68 +1,81 @@
 # CNET Agent Makefile
 
-.PHONY: build run test clean install deps
+.PHONY: build run clean test deps install
 
-# Build the agent
+# 变量定义
+BINARY_NAME=cnet-agent
+BINARY_DIR=bin
+GO=go
+GOFLAGS=-v
+
+# 默认目标
+all: build
+
+# 编译
 build:
-	go build -o bin/cnet-agent main.go
+	@echo "Building $(BINARY_NAME)..."
+	@mkdir -p $(BINARY_DIR)
+	$(GO) build $(GOFLAGS) -o $(BINARY_DIR)/$(BINARY_NAME) main.go
+	@echo "Build complete: $(BINARY_DIR)/$(BINARY_NAME)"
 
-# Run the agent
+# 运行
 run: build
-	./bin/cnet-agent -config config.yaml
+	@echo "Running $(BINARY_NAME)..."
+	./$(BINARY_DIR)/$(BINARY_NAME) -config config.yaml
 
-# Run with debug logging
-run-debug: build
-	./bin/cnet-agent -config config.yaml
-
-# Install dependencies
-deps:
-	go mod tidy
-	go mod download
-
-# Run tests
-test:
-	go test ./...
-
-# Run tests with coverage
-test-coverage:
-	go test -coverprofile=coverage.out ./...
-	go tool cover -html=coverage.out
-
-# Clean build artifacts
+# 清理
 clean:
-	rm -rf bin/
+	@echo "Cleaning..."
+	rm -rf $(BINARY_DIR)/
 	rm -f coverage.out
+	rm -f *.log
+	@echo "Clean complete"
 
-# Install the agent
-install: build
-	sudo cp bin/cnet-agent /usr/local/bin/
-	sudo cp config.yaml /etc/cnet/
-	sudo cp scripts/cnet.service /etc/systemd/system/
+# 安装依赖
+deps:
+	@echo "Installing dependencies..."
+	$(GO) mod download
+	$(GO) mod tidy
+	@echo "Dependencies installed"
 
-# Create systemd service
-install-service:
-	sudo systemctl daemon-reload
-	sudo systemctl enable cnet
-	sudo systemctl start cnet
+# 测试
+test:
+	@echo "Running tests..."
+	$(GO) test -v ./...
 
-# Stop systemd service
-stop-service:
-	sudo systemctl stop cnet
+# 测试覆盖率
+coverage:
+	@echo "Running tests with coverage..."
+	$(GO) test -v -coverprofile=coverage.out ./...
+	$(GO) tool cover -html=coverage.out
 
-# View logs
-logs:
-	journalctl -u cnet -f
+# 运行示例
+demo: build
+	@echo "Running demo..."
+	./test_agent.sh
 
-# Docker build
-docker-build:
-	docker build -t cnet-agent .
+# 格式化代码
+fmt:
+	@echo "Formatting code..."
+	$(GO) fmt ./...
 
-# Docker run
-docker-run:
-	docker run -p 8080:8080 -v $(PWD)/config.yaml:/app/config.yaml cnet-agent
+# 代码检查
+lint:
+	@echo "Running linter..."
+	golangci-lint run
 
-# Development setup
-dev-setup:
-	mkdir -p bin
-	mkdir -p logs
-	go mod tidy
+# 帮助
+help:
+	@echo "CNET Agent Makefile"
+	@echo ""
+	@echo "Usage:"
+	@echo "  make build     - Build the application"
+	@echo "  make run       - Build and run the application"
+	@echo "  make clean     - Remove build artifacts"
+	@echo "  make deps      - Install dependencies"
+	@echo "  make test      - Run tests"
+	@echo "  make coverage  - Run tests with coverage"
+	@echo "  make demo      - Run demo script"
+	@echo "  make fmt       - Format code"
+	@echo "  make lint      - Run linter"
+	@echo "  make help      - Show this help message"
