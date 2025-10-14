@@ -199,14 +199,15 @@ func (a *API) handleGetResourceStats(w http.ResponseWriter, r *http.Request) {
 // handleListNodes 列出所有节点
 func (a *API) handleListNodes(w http.ResponseWriter, r *http.Request) {
 	nodes := a.register.GetAllNodes()
+	localNode := a.register.GetLocalResources()
 	
 	// 获取父节点
 	parent := a.register.GetParentNode()
 	
-	// 所有子节点和peer节点
+	// 所有子节点和peer节点（排除本地节点）
 	var peers []*register.NodeResources
 	for _, node := range nodes {
-		if node != nil {
+		if node != nil && node.NodeID != localNode.NodeID {
 			peers = append(peers, node)
 		}
 	}
@@ -214,7 +215,7 @@ func (a *API) handleListNodes(w http.ResponseWriter, r *http.Request) {
 	a.writeJSON(w, http.StatusOK, map[string]interface{}{
 		"parent": parent,
 		"peers":  peers,
-		"total":  len(nodes),
+		"total":  len(peers),
 	})
 }
 
