@@ -60,18 +60,18 @@
     <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <!-- Agent基本信息卡片 -->
         <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
-            <!-- Agent信息 -->
+            <!-- 本节点信息 -->
             <div class="bg-white overflow-hidden shadow rounded-lg">
                 <div class="px-4 py-5 sm:p-6">
-                    <h3 class="text-lg leading-6 font-medium text-gray-900 mb-4">Agent信息</h3>
+                    <h3 class="text-lg leading-6 font-medium text-gray-900 mb-4">本节点信息</h3>
                     <dl class="space-y-3">
                         <div>
                             <dt class="text-sm font-medium text-gray-500">节点ID</dt>
-                            <dd class="mt-1 text-sm text-gray-900" x-text="agentInfo.node_id || 'agent-1'"></dd>
+                            <dd class="mt-1 text-sm text-gray-900" x-text="agentInfo.node_id || '-'"></dd>
                         </div>
                         <div>
                             <dt class="text-sm font-medium text-gray-500">地址</dt>
-                            <dd class="mt-1 text-sm text-gray-900" x-text="agentInfo.address || 'localhost:8080'"></dd>
+                            <dd class="mt-1 text-sm text-gray-900" x-text="agentInfo.address || '-'"></dd>
                         </div>
                         <div>
                             <dt class="text-sm font-medium text-gray-500">状态</dt>

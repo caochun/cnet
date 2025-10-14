@@ -71,10 +71,6 @@ function dashboard() {
                 const response = await fetch('/api/health');
                 const data = await response.json();
                 this.agentStatus = data.status === 'healthy' ? 'healthy' : 'unhealthy';
-                this.agentInfo = {
-                    node_id: 'agent-1', // 从配置或API获取
-                    address: window.location.host
-                };
             } catch (error) {
                 console.error('获取健康状态失败:', error);
                 this.agentStatus = 'error';
@@ -86,7 +82,19 @@ function dashboard() {
             try {
                 const response = await fetch('/api/resources');
                 const data = await response.json();
-                this.localResources = data.resources || { cpu: 0, memory: 0, gpu: 0, storage: 0 };
+                if (data.resources) {
+                    this.localResources = {
+                        cpu: data.resources.available.cpu || 0,
+                        memory: data.resources.available.memory || 0,
+                        gpu: data.resources.available.gpu || 0,
+                        storage: data.resources.available.storage || 0
+                    };
+                    // 更新agent信息
+                    this.agentInfo = {
+                        node_id: data.resources.node_id || '-',
+                        address: window.location.host
+                    };
+                }
             } catch (error) {
                 console.error('获取资源信息失败:', error);
             }
