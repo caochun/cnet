@@ -13,18 +13,19 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
-// OpenCVExecutor OpenCV推理服务执行器
-// 管理OpenCV HTTP推理服务进程
-type OpenCVExecutor struct {
+// YOLOExecutor YOLO模型推理服务执行器
+// 实现MLModelExecutor接口，管理YOLO HTTP推理服务进程
+type YOLOExecutor struct {
 	logger   *logrus.Logger
 	mu       sync.RWMutex
-	services map[string]*OpenCVService // workload_id -> service
+	services map[string]*YOLOService // workload_id -> service
 }
 
-// OpenCVService OpenCV推理服务实例
-type OpenCVService struct {
+// YOLOService YOLO推理服务实例
+type YOLOService struct {
 	workloadID      string
-	cascadeType     string
+	modelPath       string
+	modelType       string // yolo11, yolo8, yolo5
 	endpoint        string
 	process         *exec.Cmd
 	port            int
@@ -35,26 +36,31 @@ type OpenCVService struct {
 	cancel          context.CancelFunc
 }
 
-// NewOpenCVExecutor 创建OpenCV执行器
-func NewOpenCVExecutor(logger *logrus.Logger) *OpenCVExecutor {
-	return &OpenCVExecutor{
+// NewYOLOExecutor 创建YOLO执行器
+func NewYOLOExecutor(logger *logrus.Logger) *YOLOExecutor {
+	return &YOLOExecutor{
 		logger:   logger,
-		services: make(map[string]*OpenCVService),
+		services: make(map[string]*YOLOService),
 	}
 }
 
-// Init 初始化OpenCV执行器
-func (e *OpenCVExecutor) Init(ctx context.Context) error {
-	e.logger.Info("OpenCV Executor initialized")
-	// TODO: 可以在这里检查GoCV依赖、OpenCV版本等
+// Init 初始化YOLO执行器
+func (e *YOLOExecutor) Init(ctx context.Context) error {
+	e.logger.Info("YOLO Executor initialized")
+	// TODO: 可以在这里检查GoCV依赖、YOLO模型文件等
 	return nil
 }
 
-// Execute 执行OpenCV workload - 启动推理服务
-func (e *OpenCVExecutor) Execute(ctx context.Context, w workload.Workload) error {
-	ow, ok := w.(*workload.OpenCVWorkload)
+// Execute 执行MLModel workload - 启动YOLO推理服务
+func (e *YOLOExecutor) Execute(ctx context.Context, w workload.Workload) error {
+	mw, ok := w.(*workload.MLModelWorkload)
 	if !ok {
-		return fmt.Errorf("invalid workload type, expected OpenCVWorkload")
+		return fmt.Errorf("invalid workload type, expected MLModelWorkload")
+	}
+
+	// 验证是YOLO模型
+	if mw.ModelType != "yolo" {
+		return fmt.Errorf("invalid model type for YOLOExecutor: %s", mw.ModelType)
 	}
 
 	e.mu.Lock()
@@ -62,28 +68,29 @@ func (e *OpenCVExecutor) Execute(ctx context.Context, w workload.Workload) error
 
 	// 检查是否已经运行
 	if _, exists := e.services[w.GetID()]; exists {
-		return fmt.Errorf("OpenCV service already running for workload: %s", w.GetID())
+		return fmt.Errorf("YOLO service already running for workload: %s", w.GetID())
 	}
 
 	// 启动推理服务进程
-	service, err := e.startService(ctx, ow)
+	service, err := e.startService(ctx, mw)
 	if err != nil {
-		return fmt.Errorf("failed to start OpenCV service: %w", err)
+		return fmt.Errorf("failed to start YOLO service: %w", err)
 	}
 
 	// 保存服务实例
 	e.services[w.GetID()] = service
 
 	// 更新workload状态
-	ow.Endpoint = service.endpoint
-	ow.ProcessPID = service.process.Process.Pid
-	ow.SetStatus(workload.StatusRunning)
+	mw.Endpoint = service.endpoint
+	mw.ProcessPID = service.process.Process.Pid
+	mw.SetStatus(workload.StatusRunning)
 
 	e.logger.WithFields(logrus.Fields{
 		"workload_id": w.GetID(),
+		"model_path":  mw.ModelPath,
 		"endpoint":    service.endpoint,
 		"pid":         service.process.Process.Pid,
-	}).Info("OpenCV推理服务已启动")
+	}).Info("YOLO推理服务已启动")
 
 	// 启动健康检查
 	go e.startHealthCheck(service)
@@ -91,20 +98,20 @@ func (e *OpenCVExecutor) Execute(ctx context.Context, w workload.Workload) error
 	return nil
 }
 
-// startService 启动OpenCV推理服务进程
-func (e *OpenCVExecutor) startService(ctx context.Context, ow *workload.OpenCVWorkload) (*OpenCVService, error) {
+// startService 启动YOLO推理服务进程
+func (e *YOLOExecutor) startService(ctx context.Context, mw *workload.MLModelWorkload) (*YOLOService, error) {
 	serviceCtx, cancel := context.WithCancel(ctx)
 
 	// 构造启动命令
-	// TODO: 实际的推理服务器程序路径
+	// TODO: 实际的YOLO推理服务器程序路径
 	cmd := exec.CommandContext(serviceCtx,
-		"./bin/cnet-inference-opencv",
-		"--port", fmt.Sprintf("%d", ow.ServicePort),
-		"--cascade-type", ow.CascadeType,
+		"./bin/cnet-inference-yolo",
+		"--model", mw.ModelPath,
+		"--port", fmt.Sprintf("%d", mw.ServicePort),
 	)
 
-	if ow.CascadePath != "" {
-		cmd.Args = append(cmd.Args, "--cascade-path", ow.CascadePath)
+	if mw.ModelConfig != "" {
+		cmd.Args = append(cmd.Args, "--config", mw.ModelConfig)
 	}
 
 	// 启动进程
@@ -113,19 +120,20 @@ func (e *OpenCVExecutor) startService(ctx context.Context, ow *workload.OpenCVWo
 		return nil, fmt.Errorf("failed to start process: %w", err)
 	}
 
-	service := &OpenCVService{
-		workloadID:   ow.GetID(),
-		cascadeType:  ow.CascadeType,
-		endpoint:     fmt.Sprintf("http://%s:%d", ow.ServiceHost, ow.ServicePort),
+	service := &YOLOService{
+		workloadID:   mw.GetID(),
+		modelPath:    mw.ModelPath,
+		modelType:    mw.Framework,
+		endpoint:     fmt.Sprintf("http://%s:%d", mw.ServiceHost, mw.ServicePort),
 		process:      cmd,
-		port:         ow.ServicePort,
+		port:         mw.ServicePort,
 		restartCount: 0,
 		ctx:          serviceCtx,
 		cancel:       cancel,
 	}
 
 	// 等待服务启动（健康检查）
-	if err := e.waitForService(service, 30*time.Second); err != nil {
+	if err := e.waitForService(service, 60*time.Second); err != nil {
 		cmd.Process.Kill()
 		cancel()
 		return nil, fmt.Errorf("service failed to start: %w", err)
@@ -135,21 +143,21 @@ func (e *OpenCVExecutor) startService(ctx context.Context, ow *workload.OpenCVWo
 }
 
 // waitForService 等待服务启动
-func (e *OpenCVExecutor) waitForService(service *OpenCVService, timeout time.Duration) error {
+func (e *YOLOExecutor) waitForService(service *YOLOService, timeout time.Duration) error {
 	deadline := time.Now().Add(timeout)
 
 	for time.Now().Before(deadline) {
 		if err := e.checkServiceHealth(service); err == nil {
 			return nil
 		}
-		time.Sleep(500 * time.Millisecond)
+		time.Sleep(1 * time.Second)
 	}
 
 	return fmt.Errorf("service did not start within timeout")
 }
 
 // checkServiceHealth 检查服务健康状态
-func (e *OpenCVExecutor) checkServiceHealth(service *OpenCVService) error {
+func (e *YOLOExecutor) checkServiceHealth(service *YOLOService) error {
 	resp, err := http.Get(service.endpoint + "/health")
 	if err != nil {
 		return err
@@ -165,7 +173,7 @@ func (e *OpenCVExecutor) checkServiceHealth(service *OpenCVService) error {
 }
 
 // startHealthCheck 启动健康检查
-func (e *OpenCVExecutor) startHealthCheck(service *OpenCVService) {
+func (e *YOLOExecutor) startHealthCheck(service *YOLOService) {
 	service.healthTicker = time.NewTicker(30 * time.Second)
 
 	for {
@@ -178,10 +186,10 @@ func (e *OpenCVExecutor) startHealthCheck(service *OpenCVService) {
 				e.logger.WithFields(logrus.Fields{
 					"workload_id": service.workloadID,
 					"error":       err,
-				}).Warn("Health check failed, attempting restart")
+				}).Warn("YOLO service health check failed, attempting restart")
 
 				if err := e.restartService(service.workloadID); err != nil {
-					e.logger.WithError(err).Error("Failed to restart service")
+					e.logger.WithError(err).Error("Failed to restart YOLO service")
 				}
 			}
 		}
@@ -189,7 +197,7 @@ func (e *OpenCVExecutor) startHealthCheck(service *OpenCVService) {
 }
 
 // restartService 重启服务
-func (e *OpenCVExecutor) restartService(workloadID string) error {
+func (e *YOLOExecutor) restartService(workloadID string) error {
 	e.mu.Lock()
 	defer e.mu.Unlock()
 
@@ -200,13 +208,13 @@ func (e *OpenCVExecutor) restartService(workloadID string) error {
 
 	service.restartCount++
 	if service.restartCount > 3 {
-		return fmt.Errorf("max restart attempts reached")
+		return fmt.Errorf("max restart attempts (%d) reached", service.restartCount)
 	}
 
 	e.logger.WithFields(logrus.Fields{
 		"workload_id":   workloadID,
 		"restart_count": service.restartCount,
-	}).Info("Restarting OpenCV service")
+	}).Info("Restarting YOLO service")
 
 	// 停止旧进程
 	if service.process != nil && service.process.Process != nil {
@@ -220,8 +228,8 @@ func (e *OpenCVExecutor) restartService(workloadID string) error {
 	return fmt.Errorf("restart not fully implemented")
 }
 
-// Stop 停止OpenCV workload
-func (e *OpenCVExecutor) Stop(ctx context.Context, w workload.Workload) error {
+// Stop 停止YOLO workload
+func (e *YOLOExecutor) Stop(ctx context.Context, w workload.Workload) error {
 	e.mu.Lock()
 	defer e.mu.Unlock()
 
@@ -230,7 +238,7 @@ func (e *OpenCVExecutor) Stop(ctx context.Context, w workload.Workload) error {
 		return fmt.Errorf("service not found for workload: %s", w.GetID())
 	}
 
-	e.logger.WithField("workload_id", w.GetID()).Info("Stopping OpenCV service")
+	e.logger.WithField("workload_id", w.GetID()).Info("Stopping YOLO service")
 
 	// 停止健康检查
 	if service.healthTicker != nil {
@@ -245,7 +253,7 @@ func (e *OpenCVExecutor) Stop(ctx context.Context, w workload.Workload) error {
 	// 停止进程
 	if service.process != nil && service.process.Process != nil {
 		if err := service.process.Process.Kill(); err != nil {
-			e.logger.WithError(err).Warn("Failed to kill process")
+			e.logger.WithError(err).Warn("Failed to kill YOLO process")
 		}
 		service.process.Wait() // 等待进程退出
 	}
@@ -257,14 +265,14 @@ func (e *OpenCVExecutor) Stop(ctx context.Context, w workload.Workload) error {
 	return nil
 }
 
-// GetLogs 获取OpenCV服务日志
-func (e *OpenCVExecutor) GetLogs(ctx context.Context, w workload.Workload, lines int) ([]string, error) {
+// GetLogs 获取YOLO服务日志
+func (e *YOLOExecutor) GetLogs(ctx context.Context, w workload.Workload, lines int) ([]string, error) {
 	// TODO: 实现日志获取（从进程stdout/stderr）
-	return []string{"OpenCV service logs (not implemented)"}, nil
+	return []string{"YOLO service logs (not implemented)"}, nil
 }
 
-// GetStatus 获取OpenCV服务状态
-func (e *OpenCVExecutor) GetStatus(ctx context.Context, w workload.Workload) (workload.WorkloadStatus, error) {
+// GetStatus 获取YOLO服务状态
+func (e *YOLOExecutor) GetStatus(ctx context.Context, w workload.Workload) (workload.WorkloadStatus, error) {
 	e.mu.RLock()
 	defer e.mu.RUnlock()
 
@@ -275,7 +283,7 @@ func (e *OpenCVExecutor) GetStatus(ctx context.Context, w workload.Workload) (wo
 
 	// 检查进程是否还在运行
 	if service.process != nil && service.process.Process != nil {
-		// 检查进程状态
+		// 检查进程状态（发送signal 0）
 		if err := service.process.Process.Signal(nil); err != nil {
 			// 进程已不存在
 			return workload.StatusFailed, nil
@@ -287,7 +295,7 @@ func (e *OpenCVExecutor) GetStatus(ctx context.Context, w workload.Workload) (wo
 }
 
 // GetInferenceEndpoint 获取推理服务endpoint
-func (e *OpenCVExecutor) GetInferenceEndpoint(workloadID string) (string, error) {
+func (e *YOLOExecutor) GetInferenceEndpoint(workloadID string) (string, error) {
 	e.mu.RLock()
 	defer e.mu.RUnlock()
 
@@ -300,7 +308,7 @@ func (e *OpenCVExecutor) GetInferenceEndpoint(workloadID string) (string, error)
 }
 
 // HealthCheck 检查推理服务健康状态
-func (e *OpenCVExecutor) HealthCheck(ctx context.Context, workloadID string) error {
+func (e *YOLOExecutor) HealthCheck(ctx context.Context, workloadID string) error {
 	e.mu.RLock()
 	service, exists := e.services[workloadID]
 	e.mu.RUnlock()
@@ -311,3 +319,4 @@ func (e *OpenCVExecutor) HealthCheck(ctx context.Context, workloadID string) err
 
 	return e.checkServiceHealth(service)
 }
+
