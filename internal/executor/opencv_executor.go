@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"os"
 	"os/exec"
 	"sync"
 	"time"
@@ -95,9 +96,8 @@ func (e *OpenCVExecutor) Execute(ctx context.Context, w workload.Workload) error
 func (e *OpenCVExecutor) startService(ctx context.Context, ow *workload.OpenCVWorkload) (*OpenCVService, error) {
 	serviceCtx, cancel := context.WithCancel(ctx)
 
-	// 构造启动命令
-	// TODO: 实际的推理服务器程序路径
-	cmd := exec.CommandContext(serviceCtx,
+	// 构造启动命令（不使用CommandContext，避免自动kill）
+	cmd := exec.Command(
 		"./bin/cnet-inference-opencv",
 		"--port", fmt.Sprintf("%d", ow.ServicePort),
 		"--cascade-type", ow.CascadeType,
@@ -107,9 +107,23 @@ func (e *OpenCVExecutor) startService(ctx context.Context, ow *workload.OpenCVWo
 		cmd.Args = append(cmd.Args, "--cascade-path", ow.CascadePath)
 	}
 
+	// 设置工作目录和输出
+	cmd.Dir = "." // 当前目录
+	
+	// 创建日志文件捕获输出
+	logFile := fmt.Sprintf("opencv_service_%d.log", ow.ServicePort)
+	outFile, err := os.Create(logFile)
+	if err != nil {
+		cancel()
+		return nil, fmt.Errorf("failed to create log file: %w", err)
+	}
+	cmd.Stdout = outFile
+	cmd.Stderr = outFile
+
 	// 启动进程
 	if err := cmd.Start(); err != nil {
 		cancel()
+		outFile.Close()
 		return nil, fmt.Errorf("failed to start process: %w", err)
 	}
 

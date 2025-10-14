@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"os"
 	"os/exec"
 	"sync"
 	"time"
@@ -102,9 +103,8 @@ func (e *YOLOExecutor) Execute(ctx context.Context, w workload.Workload) error {
 func (e *YOLOExecutor) startService(ctx context.Context, mw *workload.MLModelWorkload) (*YOLOService, error) {
 	serviceCtx, cancel := context.WithCancel(ctx)
 
-	// 构造启动命令
-	// TODO: 实际的YOLO推理服务器程序路径
-	cmd := exec.CommandContext(serviceCtx,
+	// 构造启动命令（不使用CommandContext，避免自动kill）
+	cmd := exec.Command(
 		"./bin/cnet-inference-yolo",
 		"--model", mw.ModelPath,
 		"--port", fmt.Sprintf("%d", mw.ServicePort),
@@ -114,9 +114,23 @@ func (e *YOLOExecutor) startService(ctx context.Context, mw *workload.MLModelWor
 		cmd.Args = append(cmd.Args, "--config", mw.ModelConfig)
 	}
 
+	// 设置工作目录和输出
+	cmd.Dir = "." // 当前目录
+	
+	// 创建日志文件捕获输出
+	logFile := fmt.Sprintf("yolo_service_%d.log", mw.ServicePort)
+	outFile, err := os.Create(logFile)
+	if err != nil {
+		cancel()
+		return nil, fmt.Errorf("failed to create log file: %w", err)
+	}
+	cmd.Stdout = outFile
+	cmd.Stderr = outFile
+
 	// 启动进程
 	if err := cmd.Start(); err != nil {
 		cancel()
+		outFile.Close()
 		return nil, fmt.Errorf("failed to start process: %w", err)
 	}
 
