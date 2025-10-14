@@ -200,13 +200,12 @@ func (a *API) handleGetResourceStats(w http.ResponseWriter, r *http.Request) {
 func (a *API) handleListNodes(w http.ResponseWriter, r *http.Request) {
 	nodes := a.register.GetAllNodes()
 	
-	// 分离父节点和peer节点
-	var parent *register.NodeResources
-	var peers []*register.NodeResources
+	// 获取父节点
+	parent := a.register.GetParentNode()
 	
+	// 所有子节点和peer节点
+	var peers []*register.NodeResources
 	for _, node := range nodes {
-		// 这里需要根据实际的节点类型来判断
-		// 暂时将所有节点都作为peer节点
 		if node != nil {
 			peers = append(peers, node)
 		}
@@ -242,8 +241,14 @@ func (a *API) handleRegisterChild(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	a.writeJSON(w, http.StatusOK, map[string]string{
+	// 返回父节点信息给子节点
+	localNode := a.register.GetLocalResources()
+	a.writeJSON(w, http.StatusOK, map[string]interface{}{
 		"message": "Child node registered successfully",
+		"parent_node": map[string]interface{}{
+			"node_id": localNode.NodeID,
+			"address": localNode.Address,
+		},
 	})
 }
 

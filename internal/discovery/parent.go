@@ -100,6 +100,26 @@ func (c *ParentConnector) registerToParent() error {
 		return fmt.Errorf("register request failed with status: %d", resp.StatusCode)
 	}
 
+	// 解析父节点返回的信息
+	var respData map[string]interface{}
+	if err := json.NewDecoder(resp.Body).Decode(&respData); err == nil {
+		// 如果响应中包含父节点信息，将其存储到Register中
+		if parentInfo, ok := respData["parent_node"].(map[string]interface{}); ok {
+			parentNodeID, _ := parentInfo["node_id"].(string)
+			if parentNodeID != "" {
+				// 构建父节点资源信息
+				parentNode := &register.NodeResources{
+					NodeID:   parentNodeID,
+					NodeType: "parent",
+					Address:  c.parentAddr,
+					Status:   "active",
+					Metadata: make(map[string]string),
+				}
+				c.register.SetParentNode(parentNode)
+			}
+		}
+	}
+
 	c.logger.Info("Successfully registered to parent node")
 
 	return nil

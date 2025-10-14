@@ -18,6 +18,9 @@ type Register struct {
 	// 本地资源
 	localResources *NodeResources
 
+	// 上级父节点资源
+	parentNode *NodeResources
+
 	// 下级节点资源（树状结构）
 	childNodes map[string]*NodeResources
 
@@ -181,6 +184,21 @@ func (r *Register) UnregisterNode(nodeID string) error {
 	}
 
 	return fmt.Errorf("node not found: %s", nodeID)
+}
+
+// SetParentNode 设置父节点信息
+func (r *Register) SetParentNode(parentResources *NodeResources) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.parentNode = parentResources
+	r.logger.WithField("parent_node_id", parentResources.NodeID).Info("Parent node set")
+}
+
+// GetParentNode 获取父节点信息
+func (r *Register) GetParentNode() *NodeResources {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	return r.parentNode
 }
 
 // AllocateResources 分配资源
