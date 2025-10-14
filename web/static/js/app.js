@@ -14,17 +14,49 @@ function dashboard() {
         showWorkloadModal: false,
         selectedWorkload: null,
         
-        // 新工作负载表单
-        newWorkload: {
+        // 动态表单数据
+        formData: {
             name: '',
-            type: 'process',
+            type: 'mlmodel',
+            config: {
+                // MLModel
+                model_type: 'yolo',
+                model_path: 'models/yolo11n.onnx',
+                service_port: 9001,
+                // Process
+                command: '',
+                args_str: '',
+                // Container
+                image: '',
+                // OpenCV
+                cascade_type: 'face'
+            },
             requirements: {
-                cpu: 1,
-                memory: 512,
+                cpu: 2.0,
+                memory: 2048,
                 gpu: 0,
                 storage: 0
+            }
+        },
+        
+        // 类型默认配置
+        typeDefaults: {
+            mlmodel: {
+                config: { model_type: 'yolo', model_path: 'models/yolo11n.onnx', service_port: 9001 },
+                requirements: { cpu: 2.0, memory: 2048, gpu: 0, storage: 0 }
             },
-            configJson: '{}'
+            process: {
+                config: { command: 'sleep', args_str: '60' },
+                requirements: { cpu: 1.0, memory: 512, gpu: 0, storage: 0 }
+            },
+            opencv: {
+                config: { cascade_type: 'face', service_port: 9000 },
+                requirements: { cpu: 1.0, memory: 512, gpu: 0, storage: 0 }
+            },
+            container: {
+                config: { image: 'nginx:alpine' },
+                requirements: { cpu: 1.0, memory: 512, gpu: 0, storage: 0 }
+            }
         },
         
         // 计算属性
@@ -124,16 +156,65 @@ function dashboard() {
             }
         },
         
+        // 类型改变时更新默认值
+        onTypeChange() {
+            const defaults = this.typeDefaults[this.formData.type];
+            if (defaults) {
+                this.formData.config = { ...this.formData.config, ...defaults.config };
+                this.formData.requirements = { ...defaults.requirements };
+            }
+        },
+        
+        // 构建特定类型的config对象
+        buildConfig() {
+            const config = {};
+            
+            switch (this.formData.type) {
+                case 'mlmodel':
+                    config.model_type = this.formData.config.model_type;
+                    config.model_path = this.formData.config.model_path;
+                    config.service_port = parseInt(this.formData.config.service_port);
+                    if (this.formData.config.framework) {
+                        config.framework = this.formData.config.framework;
+                    }
+                    break;
+                    
+                case 'process':
+                    config.command = this.formData.config.command;
+                    if (this.formData.config.args_str) {
+                        config.args = this.formData.config.args_str.split(' ').filter(a => a);
+                    }
+                    break;
+                    
+                case 'opencv':
+                    config.cascade_type = this.formData.config.cascade_type;
+                    config.service_port = parseInt(this.formData.config.service_port);
+                    if (this.formData.config.cascade_path) {
+                        config.cascade_path = this.formData.config.cascade_path;
+                    }
+                    break;
+                    
+                case 'container':
+                    config.image = this.formData.config.image;
+                    break;
+            }
+            
+            return config;
+        },
+        
         // 提交工作负载
         async submitWorkload() {
             try {
-                const config = JSON.parse(this.newWorkload.configJson);
-                
                 const workloadData = {
-                    name: this.newWorkload.name,
-                    type: this.newWorkload.type,
-                    requirements: this.newWorkload.requirements,
-                    config: config
+                    name: this.formData.name,
+                    type: this.formData.type,
+                    requirements: {
+                        cpu: parseFloat(this.formData.requirements.cpu),
+                        memory: parseInt(this.formData.requirements.memory) * 1024 * 1024, // MB转字节
+                        gpu: parseInt(this.formData.requirements.gpu),
+                        storage: parseInt(this.formData.requirements.storage) * 1024 * 1024
+                    },
+                    config: this.buildConfig()
                 };
                 
                 const response = await fetch('/api/workloads', {
@@ -145,13 +226,19 @@ function dashboard() {
                 });
                 
                 if (response.ok) {
-                    this.showSubmitForm = false;
-                    this.resetNewWorkloadForm();
+                    const result = await response.json();
+                    this.closeSubmitForm();
                     await this.fetchWorkloads();
-                    alert('工作负载提交成功！');
+                    
+                    // 根据类型显示不同的成功消息
+                    if (this.formData.type === 'mlmodel') {
+                        alert(`ML模型部署成功！\n\nEndpoint: ${result.endpoint || 'N/A'}\n\n您可以通过此endpoint调用推理服务`);
+                    } else {
+                        alert('工作负载提交成功！');
+                    }
                 } else {
                     const error = await response.json();
-                    alert('提交失败: ' + (error.error || '未知错误'));
+                    alert('提交失败: ' + (error.error || error.details || '未知错误'));
                 }
             } catch (error) {
                 console.error('提交工作负载失败:', error);
@@ -159,18 +246,19 @@ function dashboard() {
             }
         },
         
-        // 重置新工作负载表单
-        resetNewWorkloadForm() {
-            this.newWorkload = {
+        // 关闭提交表单
+        closeSubmitForm() {
+            this.showSubmitForm = false;
+            this.resetForm();
+        },
+        
+        // 重置表单
+        resetForm() {
+            this.formData = {
                 name: '',
-                type: 'process',
-                requirements: {
-                    cpu: 1,
-                    memory: 512,
-                    gpu: 0,
-                    storage: 0
-                },
-                configJson: '{}'
+                type: 'mlmodel',
+                config: { ...this.typeDefaults.mlmodel.config },
+                requirements: { ...this.typeDefaults.mlmodel.requirements }
             };
         },
         
