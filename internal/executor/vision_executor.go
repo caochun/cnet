@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"image"
 	"image/color"
+	"math"
 	"os"
 	"path/filepath"
 	"strings"
@@ -488,11 +489,13 @@ func (e *VisionExecutor) detectWithYOLO(img gocv.Mat, vw *workload.VisionWorkloa
 
 	task.useCachedNet = useCached
 
-	// 准备输入blob（YOLO通常使用416x416或608x608）
-	inputSize := 416
+	// 准备输入blob（YOLO v5/v8/v11 使用640x640）
+	inputSize := 640
 	if size, ok := vw.Config["input_size"]; ok {
 		fmt.Sscanf(size, "%d", &inputSize)
 	}
+
+	e.logger.WithField("input_size", inputSize).Debug("Creating blob")
 
 	blob := gocv.BlobFromImage(img, 1.0/255.0, image.Pt(inputSize, inputSize),
 		gocv.NewScalar(0, 0, 0, 0), true, false)
@@ -500,24 +503,27 @@ func (e *VisionExecutor) detectWithYOLO(img gocv.Mat, vw *workload.VisionWorkloa
 
 	// 设置输入
 	net.SetInput(blob, "")
+	
+	e.logger.Debug("Running forward pass")
+
+	// YOLOv5s ONNX模型的前向传播
+	var probs []gocv.Mat
 
 	// 获取输出层名称
 	layerNames := net.GetLayerNames()
-	outLayers := []string{}
-	for _, name := range layerNames {
-		outLayers = append(outLayers, name)
-	}
+	e.logger.WithField("layer_names", layerNames).Debug("YOLO model layers")
 
-	// 如果没有输出层，使用默认前向传播
-	var probs []gocv.Mat
-	if len(outLayers) == 0 {
-		prob := net.Forward("")
-		probs = []gocv.Mat{prob}
-	} else {
-		// 前向传播到输出层
-		prob := net.Forward("")
-		probs = []gocv.Mat{prob}
-	}
+	// YOLOv5s ONNX模型使用默认前向传播
+	// 输出格式通常是 [1, 25200, 85] (batch, detections, features)
+	prob := net.Forward("")
+	probs = []gocv.Mat{prob}
+
+	e.logger.WithFields(logrus.Fields{
+		"rows":     prob.Rows(),
+		"cols":     prob.Cols(),
+		"channels": prob.Channels(),
+		"total":    prob.Total(),
+	}).Info("YOLO output shape")
 	defer func() {
 		for _, prob := range probs {
 			prob.Close()
@@ -568,44 +574,102 @@ func (e *VisionExecutor) parseDNNOutput(output gocv.Mat, width, height int, conf
 	return results
 }
 
-// parseYOLOOutput 解析YOLO输出
+// parseYOLOOutput 解析YOLO输出（使用参考代码的方法）
 func (e *VisionExecutor) parseYOLOOutput(outputs []gocv.Mat, width, height int, confidence, nmsThreshold float32) []map[string]interface{} {
 	var classIDs []int
 	var confidences []float32
 	var boxes []image.Rectangle
 
+	e.logger.WithFields(logrus.Fields{
+		"num_outputs":   len(outputs),
+		"confidence":    confidence,
+		"nms_threshold": nmsThreshold,
+	}).Debug("Parsing YOLO outputs")
+
 	// 遍历所有输出层
-	for _, output := range outputs {
-		for i := 0; i < output.Rows(); i++ {
-			// YOLO输出格式：[center_x, center_y, width, height, objectness, class_scores...]
-			objectness := output.GetFloatAt(i, 4)
+	for layerIdx, output := range outputs {
+		e.logger.WithFields(logrus.Fields{
+			"layer": layerIdx,
+			"rows":  output.Rows(),
+			"cols":  output.Cols(),
+			"total": output.Total(),
+		}).Debug("Processing YOLO output layer")
 
-			if objectness > confidence {
-				// 找到最高分类分数
-				var maxScore float32
-				var maxClassID int
+		// 使用参考代码的方法：直接访问原始数据
+		// YOLO输出格式：[x, y, w, h, conf, class_scores...] 每85个元素为一行
+		rows := output.Total() / 85
+		if rows == 0 {
+			e.logger.WithField("layer", layerIdx).Warn("No valid detections in output")
+			continue
+		}
 
-				for j := 5; j < output.Cols(); j++ {
-					score := output.GetFloatAt(i, j) * objectness
-					if score > maxScore {
-						maxScore = score
-						maxClassID = j - 5
-					}
+		data, err := output.DataPtrFloat32()
+		if err != nil {
+			e.logger.WithError(err).WithField("layer", layerIdx).Error("Failed to get data pointer")
+			continue
+		}
+
+		e.logger.WithFields(logrus.Fields{
+			"layer":       layerIdx,
+			"rows":        rows,
+			"data_length": len(data),
+		}).Debug("Processing YOLO detections")
+
+		imgW, imgH := float32(width), float32(height)
+
+		for i := 0; i < int(rows); i++ {
+			row := data[i*85 : (i+1)*85]
+
+			// YOLO输出格式：[x, y, w, h, conf, class_scores...]
+			centerX := row[0]
+			centerY := row[1]
+			bboxW := row[2]
+			bboxH := row[3]
+			conf := row[4]
+
+			if conf < confidence {
+				continue
+			}
+
+			// 找到最高分类分数
+			classID, score := e.argmax(row[5:])
+			finalScore := score * conf
+
+			if finalScore > confidence {
+				// 转换归一化坐标到像素坐标
+				cx := centerX * imgW
+				cy := centerY * imgH
+				w := bboxW * imgW
+				h := bboxH * imgH
+
+				left := int(cx - w/2)
+				top := int(cy - h/2)
+				right := left + int(w)
+				bottom := top + int(h)
+
+				// 确保坐标在图像范围内
+				if left < 0 {
+					left = 0
+				}
+				if top < 0 {
+					top = 0
+				}
+				if right >= width {
+					right = width - 1
+				}
+				if bottom >= height {
+					bottom = height - 1
 				}
 
-				if maxScore > confidence {
-					centerX := int(output.GetFloatAt(i, 0) * float32(width))
-					centerY := int(output.GetFloatAt(i, 1) * float32(height))
-					w := int(output.GetFloatAt(i, 2) * float32(width))
-					h := int(output.GetFloatAt(i, 3) * float32(height))
+				e.logger.WithFields(logrus.Fields{
+					"class_id":   classID,
+					"confidence": finalScore,
+					"bbox":       fmt.Sprintf("(%d,%d,%d,%d)", left, top, right, bottom),
+				}).Info("Valid detection found")
 
-					x := centerX - w/2
-					y := centerY - h/2
-
-					classIDs = append(classIDs, maxClassID)
-					confidences = append(confidences, maxScore)
-					boxes = append(boxes, image.Rect(x, y, x+w, y+h))
-				}
+				classIDs = append(classIDs, classID)
+				confidences = append(confidences, finalScore)
+				boxes = append(boxes, image.Rect(left, top, right, bottom))
 			}
 		}
 	}
@@ -763,4 +827,17 @@ func (e *VisionExecutor) GetLogs(ctx context.Context, w workload.Workload, lines
 // GetStatus 获取Vision workload状态
 func (e *VisionExecutor) GetStatus(ctx context.Context, w workload.Workload) (workload.WorkloadStatus, error) {
 	return w.GetStatus(), nil
+}
+
+// argmax 找最大概率类别
+func (e *VisionExecutor) argmax(scores []float32) (int, float32) {
+	maxVal := float32(-math.MaxFloat32)
+	maxIdx := -1
+	for i, v := range scores {
+		if v > maxVal {
+			maxVal = v
+			maxIdx = i
+		}
+	}
+	return maxIdx, maxVal
 }
