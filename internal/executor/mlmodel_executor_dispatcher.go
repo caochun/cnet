@@ -22,12 +22,12 @@ func NewMLModelExecutorDispatcher(logger *logrus.Logger) *MLModelExecutorDispatc
 		logger:    logger,
 		executors: make(map[string]MLModelExecutor),
 	}
-	
+
 	// 注册各种ML模型executor
 	dispatcher.RegisterExecutor("yolo", NewYOLOExecutor(logger))
 	// dispatcher.RegisterExecutor("tensorflow", NewTensorFlowExecutor(logger))
 	// dispatcher.RegisterExecutor("pytorch", NewPyTorchExecutor(logger))
-	
+
 	return dispatcher
 }
 
@@ -53,12 +53,12 @@ func (d *MLModelExecutorDispatcher) Execute(ctx context.Context, w workload.Work
 	if !ok {
 		return fmt.Errorf("invalid workload type, expected MLModelWorkload")
 	}
-	
+
 	executor, exists := d.executors[mw.ModelType]
 	if !exists {
 		return fmt.Errorf("no executor found for model type: %s", mw.ModelType)
 	}
-	
+
 	return executor.Execute(ctx, w)
 }
 
@@ -68,12 +68,12 @@ func (d *MLModelExecutorDispatcher) Stop(ctx context.Context, w workload.Workloa
 	if !ok {
 		return fmt.Errorf("invalid workload type, expected MLModelWorkload")
 	}
-	
+
 	executor, exists := d.executors[mw.ModelType]
 	if !exists {
 		return fmt.Errorf("no executor found for model type: %s", mw.ModelType)
 	}
-	
+
 	return executor.Stop(ctx, w)
 }
 
@@ -83,12 +83,12 @@ func (d *MLModelExecutorDispatcher) GetLogs(ctx context.Context, w workload.Work
 	if !ok {
 		return nil, fmt.Errorf("invalid workload type, expected MLModelWorkload")
 	}
-	
+
 	executor, exists := d.executors[mw.ModelType]
 	if !exists {
 		return nil, fmt.Errorf("no executor found for model type: %s", mw.ModelType)
 	}
-	
+
 	return executor.GetLogs(ctx, w, lines)
 }
 
@@ -98,12 +98,11 @@ func (d *MLModelExecutorDispatcher) GetStatus(ctx context.Context, w workload.Wo
 	if !ok {
 		return "", fmt.Errorf("invalid workload type, expected MLModelWorkload")
 	}
-	
+
 	executor, exists := d.executors[mw.ModelType]
 	if !exists {
 		return "", fmt.Errorf("no executor found for model type: %s", mw.ModelType)
 	}
-	
+
 	return executor.GetStatus(ctx, w)
 }
-

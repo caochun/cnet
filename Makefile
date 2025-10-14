@@ -17,6 +17,9 @@ build:
 	@mkdir -p $(BINARY_DIR)
 	$(GO) build $(GOFLAGS) -o $(BINARY_DIR)/$(BINARY_NAME) main.go
 	@echo "Build complete: $(BINARY_DIR)/$(BINARY_NAME)"
+	@echo "Building inference servers..."
+	$(GO) build $(GOFLAGS) -o $(BINARY_DIR)/cnet-inference-yolo cmd/inference/yolo/main.go
+	@echo "Build complete: $(BINARY_DIR)/cnet-inference-yolo"
 
 # 运行
 run: build
