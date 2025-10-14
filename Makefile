@@ -20,6 +20,8 @@ build:
 	@echo "Building inference servers..."
 	$(GO) build $(GOFLAGS) -o $(BINARY_DIR)/cnet-inference-yolo cmd/inference/yolo/main.go
 	@echo "Build complete: $(BINARY_DIR)/cnet-inference-yolo"
+	$(GO) build $(GOFLAGS) -o $(BINARY_DIR)/cnet-inference-opencv cmd/inference/opencv/main.go
+	@echo "Build complete: $(BINARY_DIR)/cnet-inference-opencv"
 
 # 运行
 run: build

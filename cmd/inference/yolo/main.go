@@ -31,8 +31,8 @@ type YOLOServer struct {
 
 // PredictRequest 推理请求
 type PredictRequest struct {
-	Image      string  `json:"image"`       // base64编码的图片
-	Confidence float32 `json:"confidence"`  // 置信度阈值，默认0.5
+	Image        string  `json:"image"`         // base64编码的图片
+	Confidence   float32 `json:"confidence"`    // 置信度阈值，默认0.5
 	IOUThreshold float32 `json:"iou_threshold"` // NMS IoU阈值，默认0.4
 }
 
@@ -275,7 +275,7 @@ func (s *YOLOServer) parseYOLOOutput(output *gocv.Mat, imgWidth, imgHeight int, 
 
 	// 计算行数和列数
 	rows := int(output.Total()) / 85 // YOLO输出格式: [x, y, w, h, conf, class_scores...]
-	
+
 	s.logger.Printf("Output shape: rows=%d, total=%d", rows, output.Total())
 
 	var boxes []image.Rectangle
@@ -285,10 +285,10 @@ func (s *YOLOServer) parseYOLOOutput(output *gocv.Mat, imgWidth, imgHeight int, 
 	// 解析每个检测
 	for i := 0; i < rows; i++ {
 		offset := i * 85
-		
+
 		// 获置信度
 		confidence := data[offset+4]
-		
+
 		if confidence < confThreshold {
 			continue
 		}
@@ -297,7 +297,7 @@ func (s *YOLOServer) parseYOLOOutput(output *gocv.Mat, imgWidth, imgHeight int, 
 		classScores := data[offset+5 : offset+85]
 		classID := argmax(classScores)
 		classScore := classScores[classID]
-		
+
 		finalConf := confidence * classScore
 		if finalConf < confThreshold {
 			continue
@@ -346,17 +346,17 @@ func argmax(data []float32) int {
 	if len(data) == 0 {
 		return -1
 	}
-	
+
 	maxIdx := 0
 	maxVal := data[0]
-	
+
 	for i := 1; i < len(data); i++ {
 		if data[i] > maxVal {
 			maxVal = data[i]
 			maxIdx = i
 		}
 	}
-	
+
 	return maxIdx
 }
 
@@ -413,4 +413,3 @@ func (s *YOLOServer) handlePredictFile(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(resp)
 }
-
