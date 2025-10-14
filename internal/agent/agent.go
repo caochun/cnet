@@ -60,8 +60,7 @@ func NewAgent(config *AgentConfig, logger *logrus.Logger) (*Agent, error) {
 	execFactory.Register(workload.TypeProcess, executor.NewProcessExecutor(logger))
 	execFactory.Register(workload.TypeContainer, executor.NewContainerExecutor(logger))
 	execFactory.Register(workload.TypeOpenCV, executor.NewOpenCVExecutor(logger))
-	// MLModel executor will be registered based on model type
-	// TODO: Add YOLO executor registration
+	execFactory.Register(workload.TypeMLModel, executor.NewMLModelExecutorDispatcher(logger))
 
 	// 创建Scheduler
 	sched := scheduler.NewScheduler(logger, reg, execFactory)
