@@ -9,6 +9,9 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
+// ResourceChangeCallback 资源变化回调函数
+type ResourceChangeCallback func()
+
 // Register 资源注册器
 type Register struct {
 	nodeID string
@@ -29,6 +32,9 @@ type Register struct {
 
 	// 资源分配记录
 	allocations map[string]*Allocation
+
+	// 资源变化回调
+	resourceChangeCallback ResourceChangeCallback
 
 	ctx    context.Context
 	cancel context.CancelFunc
@@ -201,6 +207,21 @@ func (r *Register) GetParentNode() *NodeResources {
 	return r.parentNode
 }
 
+// SetResourceChangeCallback 设置资源变化回调
+func (r *Register) SetResourceChangeCallback(callback ResourceChangeCallback) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.resourceChangeCallback = callback
+}
+
+// triggerResourceChange 触发资源变化回调
+func (r *Register) triggerResourceChange() {
+	if r.resourceChangeCallback != nil {
+		// 异步触发，避免阻塞
+		go r.resourceChangeCallback()
+	}
+}
+
 // AllocateResources 分配资源
 func (r *Register) AllocateResources(workloadID string, req ResourceRequirements) (*Allocation, error) {
 	if err := req.Validate(); err != nil {
@@ -238,6 +259,11 @@ func (r *Register) AllocateResources(workloadID string, req ResourceRequirements
 		"resources":     fmt.Sprintf("CPU:%.2f GPU:%d Mem:%dMB", req.CPU, req.GPU, req.Memory/(1024*1024)),
 	}).Info("Resources allocated")
 
+	// 触发资源变化回调（通知父节点）
+	r.mu.Unlock()
+	r.triggerResourceChange()
+	r.mu.Lock()
+
 	return allocation, nil
 }
 
@@ -264,6 +290,11 @@ func (r *Register) ReleaseResources(allocationID string) error {
 		"allocation_id": allocationID,
 		"workload_id":   allocation.WorkloadID,
 	}).Info("Resources released")
+
+	// 触发资源变化回调（通知父节点）
+	r.mu.Unlock()
+	r.triggerResourceChange()
+	r.mu.Lock()
 
 	return nil
 }

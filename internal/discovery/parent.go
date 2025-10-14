@@ -199,3 +199,12 @@ func (c *ParentConnector) sendHeartbeat() error {
 
 	return nil
 }
+
+// TriggerHeartbeat 立即触发一次心跳（用于资源变化时）
+func (c *ParentConnector) TriggerHeartbeat() {
+	if err := c.sendHeartbeat(); err != nil {
+		c.logger.WithError(err).Debug("Failed to send triggered heartbeat")
+	} else {
+		c.logger.Debug("Triggered heartbeat sent successfully")
+	}
+}

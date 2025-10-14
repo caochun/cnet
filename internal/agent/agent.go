@@ -88,6 +88,11 @@ func NewAgent(config *AgentConfig, logger *logrus.Logger) (*Agent, error) {
 			nodeAddr = fmt.Sprintf("localhost:%d", config.Port)
 		}
 		agent.parentConn = discovery.NewParentConnector(logger, reg, config.ParentAddr, config.NodeID, nodeAddr)
+		
+		// 设置资源变化回调 - 资源变化时立即通知父节点
+		reg.SetResourceChangeCallback(func() {
+			agent.parentConn.TriggerHeartbeat()
+		})
 	}
 
 	// 创建Peer发现（如果启用）
