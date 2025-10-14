@@ -686,7 +686,7 @@ func (e *VisionExecutor) parseYOLOOutput(outputs []gocv.Mat, width, height int, 
 
 	// 首先使用标准NMS进行同类别的初步过滤
 	indices := gocv.NMSBoxes(boxes, confidences, confidence, nmsThreshold)
-	
+
 	e.logger.WithField("boxes_after_nms", len(indices)).Debug("NMS completed")
 
 	// 收集NMS后的结果
@@ -708,7 +708,7 @@ func (e *VisionExecutor) parseYOLOOutput(outputs []gocv.Mat, width, height int, 
 
 	// 应用WBF (Weighted Box Fusion) 进行跨类别合并
 	results := e.applyWeightedBoxFusion(nmsResults, 0.3) // IoU阈值0.3，更宽松的合并条件
-	
+
 	e.logger.WithFields(logrus.Fields{
 		"boxes_after_wbf": len(results),
 	}).Debug("WBF completed")
