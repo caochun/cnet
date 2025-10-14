@@ -30,6 +30,12 @@ func NewProcessExecutor(logger *logrus.Logger) *ProcessExecutor {
 	}
 }
 
+// Init 初始化进程执行器
+func (e *ProcessExecutor) Init(ctx context.Context) error {
+	e.logger.Debug("Process Executor initialized")
+	return nil
+}
+
 // Execute 执行进程workload
 func (e *ProcessExecutor) Execute(ctx context.Context, w workload.Workload) error {
 	pw, ok := w.(*workload.ProcessWorkload)

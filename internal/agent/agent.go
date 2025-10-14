@@ -38,9 +38,10 @@ type Agent struct {
 	cancel context.CancelFunc
 
 	// 核心组件
-	register  *register.Register
-	scheduler *scheduler.Scheduler
-	manager   *manager.Manager
+	register    *register.Register
+	scheduler   *scheduler.Scheduler
+	manager     *manager.Manager
+	execFactory *executor.ExecutorFactory
 
 	// 节点发现
 	parentConn *discovery.ParentConnector
@@ -68,13 +69,14 @@ func NewAgent(config *AgentConfig, logger *logrus.Logger) (*Agent, error) {
 	mgr := manager.NewManager(logger, sched, reg)
 
 	agent := &Agent{
-		config:    config,
-		logger:    logger,
-		ctx:       ctx,
-		cancel:    cancel,
-		register:  reg,
-		scheduler: sched,
-		manager:   mgr,
+		config:      config,
+		logger:      logger,
+		ctx:         ctx,
+		cancel:      cancel,
+		register:    reg,
+		scheduler:   sched,
+		manager:     mgr,
+		execFactory: execFactory,
 	}
 
 	// 创建父节点连接器（如果启用）
@@ -99,6 +101,12 @@ func NewAgent(config *AgentConfig, logger *logrus.Logger) (*Agent, error) {
 // Start 启动Agent
 func (a *Agent) Start() error {
 	a.logger.Info("Starting CNET Agent...")
+
+	// 初始化所有Executor
+	if err := a.execFactory.InitAll(a.ctx); err != nil {
+		return fmt.Errorf("failed to initialize executors: %w", err)
+	}
+	a.logger.Info("All executors initialized")
 
 	// 启动Register
 	if err := a.register.Start(); err != nil {

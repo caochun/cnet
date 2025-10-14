@@ -23,6 +23,13 @@ func NewMLModelExecutor(logger *logrus.Logger) *MLModelExecutor {
 	}
 }
 
+// Init 初始化ML模型执行器
+func (e *MLModelExecutor) Init(ctx context.Context) error {
+	e.logger.Debug("MLModel Executor initialized")
+	// TODO: 可以在这里检查推理引擎依赖
+	return nil
+}
+
 // Execute 执行ML模型workload
 func (e *MLModelExecutor) Execute(ctx context.Context, w workload.Workload) error {
 	mw, ok := w.(*workload.MLModelWorkload)

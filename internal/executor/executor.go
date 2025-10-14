@@ -7,6 +7,9 @@ import (
 
 // Executor 执行器接口
 type Executor interface {
+	// Init 初始化执行器（在agent启动时调用）
+	Init(ctx context.Context) error
+
 	// Execute 执行workload
 	Execute(ctx context.Context, w workload.Workload) error
 
@@ -41,4 +44,16 @@ func (f *ExecutorFactory) Register(wType workload.WorkloadType, executor Executo
 func (f *ExecutorFactory) GetExecutor(wType workload.WorkloadType) (Executor, bool) {
 	executor, ok := f.executors[wType]
 	return executor, ok
+}
+
+// InitAll 初始化所有执行器
+func (f *ExecutorFactory) InitAll(ctx context.Context) error {
+	for wType, executor := range f.executors {
+		if err := executor.Init(ctx); err != nil {
+			return err
+		}
+		// 可以添加日志记录
+		_ = wType // 避免未使用变量警告
+	}
+	return nil
 }

@@ -23,6 +23,13 @@ func NewContainerExecutor(logger *logrus.Logger) *ContainerExecutor {
 	}
 }
 
+// Init 初始化容器执行器
+func (e *ContainerExecutor) Init(ctx context.Context) error {
+	e.logger.Debug("Container Executor initialized")
+	// TODO: 可以在这里检查Docker是否可用
+	return nil
+}
+
 // Execute 执行容器workload
 func (e *ContainerExecutor) Execute(ctx context.Context, w workload.Workload) error {
 	cw, ok := w.(*workload.ContainerWorkload)

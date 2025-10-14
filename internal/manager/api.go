@@ -3,8 +3,8 @@ package manager
 import (
 	"encoding/json"
 	"net/http"
-	"strconv"
 	"path/filepath"
+	"strconv"
 
 	"cnet/internal/register"
 	"cnet/internal/workload"
@@ -44,10 +44,10 @@ func (a *API) setupRoutes() {
 	// 静态文件服务
 	staticDir := "./web/static/"
 	a.router.PathPrefix("/static/").Handler(http.StripPrefix("/static/", http.FileServer(http.Dir(staticDir))))
-	
+
 	// 主页路由
 	a.router.HandleFunc("/", a.handleHomePage)
-	
+
 	// API路由
 	apiRouter := a.router.PathPrefix("/api").Subrouter()
 
@@ -200,10 +200,10 @@ func (a *API) handleGetResourceStats(w http.ResponseWriter, r *http.Request) {
 func (a *API) handleListNodes(w http.ResponseWriter, r *http.Request) {
 	nodes := a.register.GetAllNodes()
 	localNode := a.register.GetLocalResources()
-	
+
 	// 获取父节点
 	parent := a.register.GetParentNode()
-	
+
 	// 所有子节点和peer节点（排除本地节点）
 	var peers []*register.NodeResources
 	for _, node := range nodes {
@@ -211,7 +211,7 @@ func (a *API) handleListNodes(w http.ResponseWriter, r *http.Request) {
 			peers = append(peers, node)
 		}
 	}
-	
+
 	a.writeJSON(w, http.StatusOK, map[string]interface{}{
 		"parent": parent,
 		"peers":  peers,

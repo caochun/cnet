@@ -35,13 +35,19 @@ type visionTask struct {
 // NewVisionExecutor 创建Vision执行器
 // 模型会在首次使用时自动加载并缓存到内存
 func NewVisionExecutor(logger *logrus.Logger) *VisionExecutor {
-	logger.Info("Vision Executor initialized (models will be cached on first use)")
 	return &VisionExecutor{
 		logger:       logger,
 		tasks:        make(map[string]*visionTask),
 		modelCache:   make(map[string]*gocv.Net),
 		cascadeCache: make(map[string]*gocv.CascadeClassifier),
 	}
+}
+
+// Init 初始化Vision执行器
+func (e *VisionExecutor) Init(ctx context.Context) error {
+	e.logger.Info("Vision Executor initialized (models will be cached on first use)")
+	// TODO: 可以在这里检查GoCV依赖、OpenCV版本等
+	return nil
 }
 
 // getOrLoadModel 获取或加载模型（带缓存）
