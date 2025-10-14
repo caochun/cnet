@@ -503,7 +503,7 @@ func (e *VisionExecutor) detectWithYOLO(img gocv.Mat, vw *workload.VisionWorkloa
 
 	// 设置输入
 	net.SetInput(blob, "")
-	
+
 	e.logger.Debug("Running forward pass")
 
 	// YOLOv5s ONNX模型的前向传播
@@ -679,13 +679,21 @@ func (e *VisionExecutor) parseYOLOOutput(outputs []gocv.Mat, width, height int, 
 		return []map[string]interface{}{}
 	}
 
-	// NMS（非极大值抑制）
-	indices := gocv.NMSBoxes(boxes, confidences, confidence, nmsThreshold)
+	e.logger.WithFields(logrus.Fields{
+		"boxes_before_nms": len(boxes),
+		"nms_threshold":    nmsThreshold,
+	}).Debug("Applying NMS and box fusion")
 
-	var results []map[string]interface{}
+	// 首先使用标准NMS进行同类别的初步过滤
+	indices := gocv.NMSBoxes(boxes, confidences, confidence, nmsThreshold)
+	
+	e.logger.WithField("boxes_after_nms", len(indices)).Debug("NMS completed")
+
+	// 收集NMS后的结果
+	var nmsResults []map[string]interface{}
 	for _, idx := range indices {
 		box := boxes[idx]
-		results = append(results, map[string]interface{}{
+		nmsResults = append(nmsResults, map[string]interface{}{
 			"class_id":   classIDs[idx],
 			"class":      fmt.Sprintf("class_%d", classIDs[idx]),
 			"confidence": confidences[idx],
@@ -697,6 +705,13 @@ func (e *VisionExecutor) parseYOLOOutput(outputs []gocv.Mat, width, height int, 
 			},
 		})
 	}
+
+	// 应用WBF (Weighted Box Fusion) 进行跨类别合并
+	results := e.applyWeightedBoxFusion(nmsResults, 0.3) // IoU阈值0.3，更宽松的合并条件
+	
+	e.logger.WithFields(logrus.Fields{
+		"boxes_after_wbf": len(results),
+	}).Debug("WBF completed")
 
 	return results
 }
@@ -840,4 +855,153 @@ func (e *VisionExecutor) argmax(scores []float32) (int, float32) {
 		}
 	}
 	return maxIdx, maxVal
+}
+
+// applyWeightedBoxFusion 应用加权框融合 (WBF) 进行跨类别合并
+func (e *VisionExecutor) applyWeightedBoxFusion(detections []map[string]interface{}, iouThreshold float64) []map[string]interface{} {
+	if len(detections) <= 1 {
+		return detections
+	}
+
+	// 将检测结果转换为内部格式
+
+	var dets []Detection
+	for _, det := range detections {
+		bbox := det["bbox"].(map[string]int)
+		rect := image.Rect(bbox["x"], bbox["y"], bbox["x"]+bbox["width"], bbox["y"]+bbox["height"])
+		dets = append(dets, Detection{
+			Bbox:       rect,
+			Confidence: float64(det["confidence"].(float32)),
+			ClassID:    det["class_id"].(int),
+			Class:      det["class"].(string),
+		})
+	}
+
+	// WBF算法实现
+	var clusters [][]Detection
+	used := make([]bool, len(dets))
+
+	for i := 0; i < len(dets); i++ {
+		if used[i] {
+			continue
+		}
+
+		// 创建新聚类
+		cluster := []Detection{dets[i]}
+		used[i] = true
+
+		// 寻找与当前框IoU超过阈值的框
+		for j := i + 1; j < len(dets); j++ {
+			if used[j] {
+				continue
+			}
+
+			iou := e.calculateIoU(dets[i].Bbox, dets[j].Bbox)
+			if iou > iouThreshold {
+				cluster = append(cluster, dets[j])
+				used[j] = true
+			}
+		}
+
+		clusters = append(clusters, cluster)
+	}
+
+	// 合并每个聚类
+	var results []map[string]interface{}
+	for _, cluster := range clusters {
+		if len(cluster) == 1 {
+			// 单个框，直接添加
+			det := cluster[0]
+			results = append(results, map[string]interface{}{
+				"class_id":   det.ClassID,
+				"class":      det.Class,
+				"confidence": float32(det.Confidence),
+				"bbox": map[string]int{
+					"x":      det.Bbox.Min.X,
+					"y":      det.Bbox.Min.Y,
+					"width":  det.Bbox.Dx(),
+					"height": det.Bbox.Dy(),
+				},
+			})
+		} else {
+			// 多个框，进行加权融合
+			fused := e.fuseBoxes(cluster)
+			results = append(results, fused)
+		}
+	}
+
+	return results
+}
+
+// calculateIoU 计算两个边界框的IoU
+func (e *VisionExecutor) calculateIoU(box1, box2 image.Rectangle) float64 {
+	// 计算交集
+	intersection := box1.Intersect(box2)
+	if intersection.Empty() {
+		return 0.0
+	}
+
+	intersectionArea := intersection.Dx() * intersection.Dy()
+	unionArea := (box1.Dx()*box1.Dy() + box2.Dx()*box2.Dy()) - intersectionArea
+
+	if unionArea <= 0 {
+		return 0.0
+	}
+
+	return float64(intersectionArea) / float64(unionArea)
+}
+
+// Detection 内部检测结构体
+type Detection struct {
+	Bbox       image.Rectangle
+	Confidence float64
+	ClassID    int
+	Class      string
+}
+
+// fuseBoxes 融合多个检测框
+func (e *VisionExecutor) fuseBoxes(cluster []Detection) map[string]interface{} {
+	if len(cluster) == 0 {
+		return nil
+	}
+
+	// 找到置信度最高的类别
+	maxConf := 0.0
+	bestClassID := 0
+	bestClass := ""
+	totalWeight := 0.0
+
+	for _, det := range cluster {
+		if det.Confidence > maxConf {
+			maxConf = det.Confidence
+			bestClassID = det.ClassID
+			bestClass = det.Class
+		}
+		totalWeight += det.Confidence
+	}
+
+	// 加权融合边界框
+	var weightedX1, weightedY1, weightedX2, weightedY2 float64
+	for _, det := range cluster {
+		weight := det.Confidence / totalWeight
+		weightedX1 += float64(det.Bbox.Min.X) * weight
+		weightedY1 += float64(det.Bbox.Min.Y) * weight
+		weightedX2 += float64(det.Bbox.Max.X) * weight
+		weightedY2 += float64(det.Bbox.Max.Y) * weight
+	}
+
+	// 计算融合后的置信度（取最高置信度）
+	finalConf := maxConf
+
+	return map[string]interface{}{
+		"class_id":   bestClassID,
+		"class":      bestClass,
+		"confidence": float32(finalConf),
+		"bbox": map[string]int{
+			"x":      int(weightedX1),
+			"y":      int(weightedY1),
+			"width":  int(weightedX2 - weightedX1),
+			"height": int(weightedY2 - weightedY1),
+		},
+	}
 }
