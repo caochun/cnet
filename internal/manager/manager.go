@@ -64,18 +64,10 @@ func (m *Manager) SubmitWorkload(ctx context.Context, req *workload.CreateWorklo
 		w = workload.NewContainerWorkload(req.Name, image, *req)
 
 	case workload.TypeMLModel:
-		modelPath, ok := req.Config["model_path"].(string)
-		if !ok {
-			return nil, fmt.Errorf("model_path is required for ML model workload")
-		}
-		w = workload.NewMLModelWorkload(req.Name, modelPath, *req)
+		w = workload.NewMLModelWorkload(req.Name, *req)
 
-	case workload.TypeVision:
-		inputPath, ok := req.Config["input_path"].(string)
-		if !ok {
-			return nil, fmt.Errorf("input_path is required for vision workload")
-		}
-		w = workload.NewVisionWorkload(req.Name, inputPath, *req)
+	case workload.TypeOpenCV:
+		w = workload.NewOpenCVWorkload(req.Name, *req)
 
 	default:
 		return nil, fmt.Errorf("unsupported workload type: %s", req.Type)

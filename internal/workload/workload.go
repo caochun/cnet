@@ -12,7 +12,7 @@ const (
 	TypeContainer WorkloadType = "container"
 	TypeProcess   WorkloadType = "process"
 	TypeMLModel   WorkloadType = "mlmodel"
-	TypeVision    WorkloadType = "vision"
+	TypeOpenCV    WorkloadType = "opencv"
 )
 
 // WorkloadStatus workload状态
