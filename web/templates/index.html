@@ -1,0 +1,386 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CNET Agent Dashboard</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js" defer></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        primary: {
+                            50: '#eff6ff',
+                            500: '#3b82f6',
+                            600: '#2563eb',
+                            700: '#1d4ed8',
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+</head>
+<body class="bg-gray-50 min-h-screen" x-data="dashboard()">
+    <!-- 顶部导航栏 -->
+    <nav class="bg-white shadow-sm border-b border-gray-200">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex justify-between items-center h-16">
+                <div class="flex items-center">
+                    <div class="flex-shrink-0">
+                        <h1 class="text-2xl font-bold text-gray-900">CNET Agent</h1>
+                    </div>
+                    <div class="ml-6">
+                        <span class="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium"
+                              :class="agentStatus === 'healthy' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'">
+                            <span class="w-2 h-2 rounded-full mr-2"
+                                  :class="agentStatus === 'healthy' ? 'bg-green-400' : 'bg-red-400'"></span>
+                            <span x-text="agentStatus === 'healthy' ? '在线' : '离线'"></span>
+                        </span>
+                    </div>
+                </div>
+                <div class="flex items-center space-x-4">
+                    <button @click="refreshData()" 
+                            class="inline-flex items-center px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500">
+                        <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
+                        </svg>
+                        刷新
+                    </button>
+                    <div class="text-sm text-gray-500">
+                        最后更新: <span x-text="lastUpdate"></span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <!-- Agent基本信息卡片 -->
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
+            <!-- Agent信息 -->
+            <div class="bg-white overflow-hidden shadow rounded-lg">
+                <div class="px-4 py-5 sm:p-6">
+                    <h3 class="text-lg leading-6 font-medium text-gray-900 mb-4">Agent信息</h3>
+                    <dl class="space-y-3">
+                        <div>
+                            <dt class="text-sm font-medium text-gray-500">节点ID</dt>
+                            <dd class="mt-1 text-sm text-gray-900" x-text="agentInfo.node_id || 'agent-1'"></dd>
+                        </div>
+                        <div>
+                            <dt class="text-sm font-medium text-gray-500">地址</dt>
+                            <dd class="mt-1 text-sm text-gray-900" x-text="agentInfo.address || 'localhost:8080'"></dd>
+                        </div>
+                        <div>
+                            <dt class="text-sm font-medium text-gray-500">状态</dt>
+                            <dd class="mt-1">
+                                <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium"
+                                      :class="agentStatus === 'healthy' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'">
+                                    <span x-text="agentStatus === 'healthy' ? '运行中' : '离线'"></span>
+                                </span>
+                            </dd>
+                        </div>
+                    </dl>
+                </div>
+            </div>
+
+            <!-- 上级节点 -->
+            <div class="bg-white overflow-hidden shadow rounded-lg">
+                <div class="px-4 py-5 sm:p-6">
+                    <h3 class="text-lg leading-6 font-medium text-gray-900 mb-4">上级节点</h3>
+                    <div x-show="parentNode">
+                        <dl class="space-y-3">
+                            <div>
+                                <dt class="text-sm font-medium text-gray-500">节点ID</dt>
+                                <dd class="mt-1 text-sm text-gray-900" x-text="parentNode.node_id"></dd>
+                            </div>
+                            <div>
+                                <dt class="text-sm font-medium text-gray-500">地址</dt>
+                                <dd class="mt-1 text-sm text-gray-900" x-text="parentNode.address"></dd>
+                            </div>
+                            <div>
+                                <dt class="text-sm font-medium text-gray-500">状态</dt>
+                                <dd class="mt-1">
+                                    <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                                        已连接
+                                    </span>
+                                </dd>
+                            </div>
+                        </dl>
+                    </div>
+                    <div x-show="!parentNode" class="text-center py-4">
+                        <svg class="mx-auto h-12 w-12 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2 2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4"></path>
+                        </svg>
+                        <p class="mt-2 text-sm text-gray-500">无上级节点</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Peer节点 -->
+            <div class="bg-white overflow-hidden shadow rounded-lg">
+                <div class="px-4 py-5 sm:p-6">
+                    <h3 class="text-lg leading-6 font-medium text-gray-900 mb-4">Peer节点</h3>
+                    <div x-show="peerNodes.length > 0">
+                        <div class="space-y-3">
+                            <template x-for="peer in peerNodes" :key="peer.node_id">
+                                <div class="border rounded-lg p-3">
+                                    <div class="flex justify-between items-start">
+                                        <div>
+                                            <p class="text-sm font-medium text-gray-900" x-text="peer.node_id"></p>
+                                            <p class="text-xs text-gray-500" x-text="peer.address"></p>
+                                        </div>
+                                        <span class="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                                            已连接
+                                        </span>
+                                    </div>
+                                </div>
+                            </template>
+                        </div>
+                    </div>
+                    <div x-show="peerNodes.length === 0" class="text-center py-4">
+                        <svg class="mx-auto h-12 w-12 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"></path>
+                        </svg>
+                        <p class="mt-2 text-sm text-gray-500">无Peer节点</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 资源使用情况 -->
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+            <!-- 本地资源 -->
+            <div class="bg-white overflow-hidden shadow rounded-lg">
+                <div class="px-4 py-5 sm:p-6">
+                    <h3 class="text-lg leading-6 font-medium text-gray-900 mb-4">本地资源</h3>
+                    <dl class="grid grid-cols-2 gap-4">
+                        <div>
+                            <dt class="text-sm font-medium text-gray-500">CPU</dt>
+                            <dd class="mt-1 text-2xl font-semibold text-gray-900" x-text="localResources.cpu + ' 核心'"></dd>
+                        </div>
+                        <div>
+                            <dt class="text-sm font-medium text-gray-500">内存</dt>
+                            <dd class="mt-1 text-2xl font-semibold text-gray-900" x-text="formatMemory(localResources.memory)"></dd>
+                        </div>
+                        <div>
+                            <dt class="text-sm font-medium text-gray-500">GPU</dt>
+                            <dd class="mt-1 text-2xl font-semibold text-gray-900" x-text="localResources.gpu + ' 个'"></dd>
+                        </div>
+                        <div>
+                            <dt class="text-sm font-medium text-gray-500">存储</dt>
+                            <dd class="mt-1 text-2xl font-semibold text-gray-900" x-text="formatMemory(localResources.storage)"></dd>
+                        </div>
+                    </dl>
+                </div>
+            </div>
+
+            <!-- 资源统计 -->
+            <div class="bg-white overflow-hidden shadow rounded-lg">
+                <div class="px-4 py-5 sm:p-6">
+                    <h3 class="text-lg leading-6 font-medium text-gray-900 mb-4">资源统计</h3>
+                    <dl class="space-y-3">
+                        <div class="flex justify-between">
+                            <dt class="text-sm font-medium text-gray-500">总工作负载</dt>
+                            <dd class="text-sm text-gray-900" x-text="workloads.length"></dd>
+                        </div>
+                        <div class="flex justify-between">
+                            <dt class="text-sm font-medium text-gray-500">运行中</dt>
+                            <dd class="text-sm text-gray-900" x-text="runningWorkloads"></dd>
+                        </div>
+                        <div class="flex justify-between">
+                            <dt class="text-sm font-medium text-gray-500">已完成</dt>
+                            <dd class="text-sm text-gray-900" x-text="completedWorkloads"></dd>
+                        </div>
+                        <div class="flex justify-between">
+                            <dt class="text-sm font-medium text-gray-500">已失败</dt>
+                            <dd class="text-sm text-gray-900" x-text="failedWorkloads"></dd>
+                        </div>
+                    </dl>
+                </div>
+            </div>
+        </div>
+
+        <!-- 工作负载列表 -->
+        <div class="bg-white shadow rounded-lg">
+            <div class="px-4 py-5 sm:p-6">
+                <div class="flex justify-between items-center mb-4">
+                    <h3 class="text-lg leading-6 font-medium text-gray-900">工作负载</h3>
+                    <button @click="showSubmitForm = !showSubmitForm"
+                            class="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500">
+                        <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"></path>
+                        </svg>
+                        提交工作负载
+                    </button>
+                </div>
+
+                <!-- 提交表单 -->
+                <div x-show="showSubmitForm" class="mb-6 p-4 bg-gray-50 rounded-lg">
+                    <h4 class="text-md font-medium text-gray-900 mb-3">提交新的工作负载</h4>
+                    <form @submit.prevent="submitWorkload()">
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700">名称</label>
+                                <input x-model="newWorkload.name" type="text" required
+                                       class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-primary-500 focus:border-primary-500 sm:text-sm">
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700">类型</label>
+                                <select x-model="newWorkload.type" required
+                                        class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-primary-500 focus:border-primary-500 sm:text-sm">
+                                    <option value="process">进程</option>
+                                    <option value="container">容器</option>
+                                    <option value="mlmodel">ML模型</option>
+                                    <option value="vision">视觉任务</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700">CPU需求</label>
+                                <input x-model="newWorkload.requirements.cpu" type="number" step="0.1" min="0"
+                                       class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-primary-500 focus:border-primary-500 sm:text-sm">
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700">内存需求 (MB)</label>
+                                <input x-model="newWorkload.requirements.memory" type="number" min="0"
+                                       class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-primary-500 focus:border-primary-500 sm:text-sm">
+                            </div>
+                        </div>
+                        <div class="mt-4">
+                            <label class="block text-sm font-medium text-gray-700">配置 (JSON)</label>
+                            <textarea x-model="newWorkload.configJson" rows="4"
+                                      class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-primary-500 focus:border-primary-500 sm:text-sm"
+                                      placeholder='{"command": "echo hello", "args": []}'></textarea>
+                        </div>
+                        <div class="mt-4 flex justify-end space-x-3">
+                            <button type="button" @click="showSubmitForm = false"
+                                    class="inline-flex items-center px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500">
+                                取消
+                            </button>
+                            <button type="submit"
+                                    class="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500">
+                                提交
+                            </button>
+                        </div>
+                    </form>
+                </div>
+
+                <!-- 工作负载表格 -->
+                <div class="overflow-hidden">
+                    <table class="min-w-full divide-y divide-gray-200">
+                        <thead class="bg-gray-50">
+                            <tr>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">ID</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">名称</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">类型</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">状态</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">创建时间</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">操作</th>
+                            </tr>
+                        </thead>
+                        <tbody class="bg-white divide-y divide-gray-200">
+                            <template x-for="workload in workloads" :key="workload.id">
+                                <tr>
+                                    <td class="px-6 py-4 whitespace-nowrap text-sm font-mono text-gray-900" x-text="workload.id.substring(0, 8) + '...'"></td>
+                                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900" x-text="workload.name"></td>
+                                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                                        <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium"
+                                              :class="getWorkloadTypeColor(workload.type)">
+                                            <span x-text="workload.type"></span>
+                                        </span>
+                                    </td>
+                                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                                        <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium"
+                                              :class="getStatusColor(workload.status)">
+                                            <span x-text="workload.status"></span>
+                                        </span>
+                                    </td>
+                                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500" x-text="formatDate(workload.created_at)"></td>
+                                    <td class="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                                        <button @click="viewWorkload(workload)"
+                                                class="text-primary-600 hover:text-primary-900 mr-3">查看</button>
+                                        <button @click="stopWorkload(workload.id)" x-show="workload.status === 'running'"
+                                                class="text-red-600 hover:text-red-900">停止</button>
+                                    </td>
+                                </tr>
+                            </template>
+                        </tbody>
+                    </table>
+                    <div x-show="workloads.length === 0" class="text-center py-8">
+                        <svg class="mx-auto h-12 w-12 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v10a2 2 0 002 2h8a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"></path>
+                        </svg>
+                        <p class="mt-2 text-sm text-gray-500">暂无工作负载</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 工作负载详情模态框 -->
+    <div x-show="showWorkloadModal" x-transition:enter="transition ease-out duration-300" x-transition:enter-start="opacity-0" x-transition:enter-end="opacity-100" x-transition:leave="transition ease-in duration-200" x-transition:leave-start="opacity-100" x-transition:leave-end="opacity-0" class="fixed inset-0 z-50 overflow-y-auto" style="display: none;">
+        <div class="flex items-end justify-center min-h-screen pt-4 px-4 pb-20 text-center sm:block sm:p-0">
+            <div class="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity" @click="showWorkloadModal = false"></div>
+            <div class="inline-block align-bottom bg-white rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-4xl sm:w-full">
+                <div class="bg-white px-4 pt-5 pb-4 sm:p-6 sm:pb-4">
+                    <div class="sm:flex sm:items-start">
+                        <div class="mt-3 text-center sm:mt-0 sm:ml-4 sm:text-left w-full">
+                            <h3 class="text-lg leading-6 font-medium text-gray-900 mb-4">工作负载详情</h3>
+                            <div x-show="selectedWorkload">
+                                <dl class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                    <div>
+                                        <dt class="text-sm font-medium text-gray-500">ID</dt>
+                                        <dd class="mt-1 text-sm text-gray-900 font-mono" x-text="selectedWorkload?.id"></dd>
+                                    </div>
+                                    <div>
+                                        <dt class="text-sm font-medium text-gray-500">名称</dt>
+                                        <dd class="mt-1 text-sm text-gray-900" x-text="selectedWorkload?.name"></dd>
+                                    </div>
+                                    <div>
+                                        <dt class="text-sm font-medium text-gray-500">类型</dt>
+                                        <dd class="mt-1 text-sm text-gray-900" x-text="selectedWorkload?.type"></dd>
+                                    </div>
+                                    <div>
+                                        <dt class="text-sm font-medium text-gray-500">状态</dt>
+                                        <dd class="mt-1">
+                                            <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium"
+                                                  :class="getStatusColor(selectedWorkload?.status)">
+                                                <span x-text="selectedWorkload?.status"></span>
+                                            </span>
+                                        </dd>
+                                    </div>
+                                    <div>
+                                        <dt class="text-sm font-medium text-gray-500">创建时间</dt>
+                                        <dd class="mt-1 text-sm text-gray-900" x-text="formatDate(selectedWorkload?.created_at)"></dd>
+                                    </div>
+                                    <div>
+                                        <dt class="text-sm font-medium text-gray-500">更新时间</dt>
+                                        <dd class="mt-1 text-sm text-gray-900" x-text="formatDate(selectedWorkload?.updated_at)"></dd>
+                                    </div>
+                                </dl>
+                                
+                                <div class="mt-6" x-show="selectedWorkload?.results">
+                                    <h4 class="text-md font-medium text-gray-900 mb-2">检测结果</h4>
+                                    <div class="bg-gray-50 rounded-lg p-4">
+                                        <pre class="text-sm text-gray-700" x-text="JSON.stringify(selectedWorkload?.results, null, 2)"></pre>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="bg-gray-50 px-4 py-3 sm:px-6 sm:flex sm:flex-row-reverse">
+                    <button @click="showWorkloadModal = false"
+                            class="w-full inline-flex justify-center rounded-md border border-transparent shadow-sm px-4 py-2 bg-primary-600 text-base font-medium text-white hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 sm:ml-3 sm:w-auto sm:text-sm">
+                        关闭
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="/static/js/app.js"></script>
+</body>
+</html>

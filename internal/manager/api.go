@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"strconv"
+	"path/filepath"
 
 	"cnet/internal/register"
 	"cnet/internal/workload"
@@ -40,6 +41,13 @@ func (a *API) GetRouter() *mux.Router {
 
 // setupRoutes 设置路由
 func (a *API) setupRoutes() {
+	// 静态文件服务
+	staticDir := "./web/static/"
+	a.router.PathPrefix("/static/").Handler(http.StripPrefix("/static/", http.FileServer(http.Dir(staticDir))))
+	
+	// 主页路由
+	a.router.HandleFunc("/", a.handleHomePage)
+	
 	// API路由
 	apiRouter := a.router.PathPrefix("/api").Subrouter()
 
@@ -70,6 +78,13 @@ func (a *API) setupRoutes() {
 
 	// 健康检查
 	apiRouter.HandleFunc("/health", a.handleHealth).Methods("GET")
+}
+
+// handleHomePage 处理主页
+func (a *API) handleHomePage(w http.ResponseWriter, r *http.Request) {
+	// 读取HTML模板
+	htmlPath := filepath.Join("web", "templates", "index.html")
+	http.ServeFile(w, r, htmlPath)
 }
 
 // handleSubmitWorkload 提交workload
@@ -170,7 +185,9 @@ func (a *API) handleGetLogs(w http.ResponseWriter, r *http.Request) {
 // handleGetResources 获取本地资源信息
 func (a *API) handleGetResources(w http.ResponseWriter, r *http.Request) {
 	resources := a.register.GetLocalResources()
-	a.writeJSON(w, http.StatusOK, resources)
+	a.writeJSON(w, http.StatusOK, map[string]interface{}{
+		"resources": resources,
+	})
 }
 
 // handleGetResourceStats 获取资源统计
@@ -182,9 +199,23 @@ func (a *API) handleGetResourceStats(w http.ResponseWriter, r *http.Request) {
 // handleListNodes 列出所有节点
 func (a *API) handleListNodes(w http.ResponseWriter, r *http.Request) {
 	nodes := a.register.GetAllNodes()
+	
+	// 分离父节点和peer节点
+	var parent *register.NodeResources
+	var peers []*register.NodeResources
+	
+	for _, node := range nodes {
+		// 这里需要根据实际的节点类型来判断
+		// 暂时将所有节点都作为peer节点
+		if node != nil {
+			peers = append(peers, node)
+		}
+	}
+	
 	a.writeJSON(w, http.StatusOK, map[string]interface{}{
-		"nodes": nodes,
-		"count": len(nodes),
+		"parent": parent,
+		"peers":  peers,
+		"total":  len(nodes),
 	})
 }
 
