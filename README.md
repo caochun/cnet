@@ -71,7 +71,7 @@ MLModelWorkload (用户提交)
     ↓
 MLModelExecutorDispatcher (根据model_type分发)
     ↓
-具体Executor (如YOLOExecutor)
+具体Executor (如YOLOInferenceExecutor)
     ↓
 启动独立的HTTP推理服务进程
     ↓
@@ -87,7 +87,7 @@ MLModelExecutorDispatcher (根据model_type分发)
 ```
 1. 用户提交MLModelWorkload（包含模型路径、资源需求）
 2. Register分配资源（CPU、Memory、GPU）
-3. YOLOExecutor启动推理服务子进程
+3. YOLOInferenceExecutor 启动推理服务子进程
 4. 推理服务加载模型，启动HTTP server
 5. 返回推理endpoint（如 http://localhost:9001）
 6. 用户通过endpoint调用推理API
@@ -125,7 +125,7 @@ Body: {"image": "base64_encoded_image", "confidence": 0.5}
 
 ### 4. OpenCV（OpenCV推理服务）
 
-基于Haar Cascade的OpenCV推理服务，专注于经典CV算法。
+基于 Haar Cascade 的 OpenCV 推理服务，专注于经典 CV 算法。
 
 **支持的功能：**
 - 人脸检测（face）
@@ -139,9 +139,10 @@ Body: {"image": "base64_encoded_image", "confidence": 0.5}
 ```bash
 make build
 # 产出：
-# - bin/cnet-agent              (主程序，9.7MB)
-# - bin/cnet-inference-yolo     (YOLO推理服务，9.5MB)
-# - bin/cnet-inference-opencv   (OpenCV推理服务，9.5MB)
+# - bin/cnet-agent               (主程序)
+# - bin/cnet-inference-yolo      (YOLO 推理服务)
+# - bin/cnet-inference-opencv    (OpenCV 推理服务)
+# - bin/cnet-gateway-data        (数据网关服务)
 ```
 
 ### 2. 单节点运行
@@ -164,7 +165,7 @@ make build
 
 ## API使用示例
 
-### 部署YOLO模型推理服务
+### 部署 YOLO 模型推理服务
 
 ```bash
 curl -X POST http://localhost:8080/api/workloads \
@@ -193,7 +194,7 @@ curl -X POST http://localhost:8080/api/workloads \
 # }
 ```
 
-### 调用YOLO推理
+### 调用 YOLO 推理
 
 ```bash
 # 方式1: 使用base64编码的图片
@@ -212,7 +213,7 @@ curl -X POST http://localhost:9001/predict \
 # }
 ```
 
-### 部署OpenCV推理服务
+### 部署 OpenCV 推理服务
 
 ```bash
 curl -X POST http://localhost:8080/api/workloads \
@@ -231,7 +232,7 @@ curl -X POST http://localhost:8080/api/workloads \
   }'
 ```
 
-### 提交Process Workload
+### 提交 Process Workload
 
 ```bash
 curl -X POST http://localhost:8080/api/workloads \
@@ -250,7 +251,7 @@ curl -X POST http://localhost:8080/api/workloads \
   }'
 ```
 
-### 查看和管理Workload
+### 查看和管理 Workload
 
 ```bash
 # 查看所有workload
@@ -289,34 +290,26 @@ curl http://localhost:8080/api/health
 ./stop_cluster.sh
 ```
 
-## ML模型部署架构详解
+## ML 模型部署架构详解
 
 ### 核心概念
 
-#### 1. MLModelExecutor接口
+#### 1. MLModelExecutor 接口
 
-所有ML模型executor必须实现的接口：
+所有 ML 模型执行器遵循统一的服务型契约：
 
 ```go
+// MLModelExecutor 继承 ServiceExecutor（统一服务型工作负载契约）
 type MLModelExecutor interface {
-    // 基础Executor接口
-    Init(ctx context.Context) error
-    Execute(ctx context.Context, w workload.Workload) error
-    Stop(ctx context.Context, w workload.Workload) error
-    GetLogs(ctx context.Context, w workload.Workload, lines int) ([]string, error)
-    GetStatus(ctx context.Context, w workload.Workload) (workload.WorkloadStatus, error)
-    
-    // ML模型特有接口
-    GetInferenceEndpoint(workloadID string) (string, error)
-    HealthCheck(ctx context.Context, workloadID string) error
+    ServiceExecutor
 }
 ```
 
-#### 2. YOLOExecutor实现
+#### 2. YOLOInferenceExecutor 实现
 
 **职责：**
-- 管理YOLO推理服务进程的生命周期
-- 启动`cnet-inference-yolo`独立进程
+- 管理 YOLO 推理服务进程的生命周期
+- 启动 `cnet-inference-yolo` 独立进程
 - 监控服务健康状态
 - 自动重启崩溃的服务
 
@@ -333,15 +326,15 @@ Execute() 被调用
 返回推理endpoint
 ```
 
-#### 3. YOLO推理服务器
+#### 3. YOLO 推理服务器
 
-独立的Go程序（`cmd/inference/yolo/main.go`）：
+独立的 Go 程序（`cmd/inference/yolo/main.go`）：
 
 **功能：**
-- 使用GoCV加载YOLO ONNX模型
-- 提供HTTP推理API
+- 使用 GoCV 加载 YOLO ONNX 模型
+- 提供 HTTP 推理 API
 - 处理图片预处理和后处理
-- NMS过滤重复检测
+- NMS 过滤重复检测
 
 **API端点：**
 - `POST /predict` - 推理接口
@@ -357,12 +350,12 @@ Execute() 被调用
 
 #### 4. MLModelExecutorDispatcher
 
-根据`model_type`智能分发到对应的executor：
+根据 `model_type` 智能分发到对应的执行器：
 
 ```go
 switch mlWorkload.ModelType {
 case "yolo":
-    return YOLOExecutor.Execute(...)
+    return YOLOInferenceExecutor.Execute(...)
 case "tensorflow":
     return TensorFlowExecutor.Execute(...)
 case "pytorch":
@@ -372,7 +365,7 @@ case "pytorch":
 
 ### 资源管理机制
 
-#### 用户提交MLModelWorkload
+#### 用户提交 MLModelWorkload
 
 ```json
 {
@@ -391,7 +384,7 @@ case "pytorch":
 }
 ```
 
-#### Register资源追踪
+#### Register 资源追踪
 
 **部署前：**
 ```
@@ -446,7 +439,7 @@ ParentConnector.TriggerHeartbeat()
 
 ## 使用示例
 
-### 场景1: 单节点部署YOLO模型
+### 场景 1: 单节点部署 YOLO 模型
 
 ```bash
 # 1. 启动agent
@@ -476,7 +469,7 @@ curl -X POST http://localhost:9001/predict \
   -d "{\"image\": \"$IMAGE_B64\"}"
 ```
 
-### 场景2: 集群部署和资源委托
+### 场景 2: 集群部署和资源委托
 
 ```bash
 # 1. 启动集群
@@ -515,23 +508,73 @@ http://localhost:8082/  # 宿迁节点
 http://localhost:8083/  # 常州节点
 ```
 
-**Web UI功能：**
-- 📊 本节点信息（节点ID、地址、状态）
-- 🔗 上级节点和Peer节点信息
+**Web UI 功能：**
+- 📊 本节点信息（节点 ID、地址、状态）
+- 🔗 上级节点和 Peer 节点信息（已剔除本节点）
 - 💻 资源使用情况（CPU、内存、GPU、存储）
-- 📋 工作负载管理（查看、提交、停止）
-- 🎨 Tailwind CSS现代化界面
-- ⚡ 30秒自动刷新
+- 📋 工作负载管理（查看、提交、停止、动态表单提交）
+- 🧩 动态表单支持：mlmodel / opencv / process / container / data / datagateway
+- 🎨 Tailwind CSS 现代化界面 + 简洁交互
+- ⚡ 30 秒自动刷新 + 触发式心跳带来的近实时同步
+
+### 数据工作负载（Data）与数据网关（DataGateway）
+
+数据作为独立资源管理：使用 SQLite + 文件系统（/tmp/cnet_storage.db + /tmp/cnet_data）存储元数据与对象。
+
+1) 提交单文件 Data Workload（multipart/form-data）：
+```bash
+curl -X POST http://localhost:8080/api/workloads \
+  -H "Content-Type: multipart/form-data" \
+  -F "type=data" \
+  -F "name=test-file" \
+  -F "file=@./gw_test.txt"
+# 返回包含 data_key、最终持久化路径等信息
+```
+
+2) 提交目录 Data Workload（目录上传，浏览器提交，后端聚合保存）：
+- Web UI 选择目录后自动打包为多文件上传，由后端归档到 /tmp/cnet_data，并写入 SQLite 元数据。
+
+3) 启动 DataGateway Workload（只读 S3 子集接口）：
+```bash
+curl -X POST http://localhost:8080/api/workloads \
+  -H "Content-Type: application/json" \
+  -d '{
+        "name": "data-gateway",
+        "type": "datagateway",
+        "config": {
+          "service_port": 9091,
+          "service_host": "127.0.0.1",
+          "base_path": "/tmp/cnet_data",
+          "bucket": "cnet"
+        }
+      }'
+# 返回 endpoint，如 http://127.0.0.1:9091
+```
+
+4) 通过网关访问对象（只读）：
+```bash
+# 健康检查
+curl http://127.0.0.1:9091/health
+
+# 列举对象（ListObjectsV2 子集）
+curl "http://127.0.0.1:9091/s3/cnet?list-type=2&prefix=<data_key>"
+
+# 下载对象
+curl http://127.0.0.1:9091/s3/cnet/<data_key>/gw_test.txt
+```
 
 ## 目录结构
 
 ```
 cnet/
 ├── bin/                           # 编译产物
-│   ├── cnet-agent                 # 主程序（9.7MB）
-│   ├── cnet-inference-yolo        # YOLO推理服务（9.5MB）
-│   └── cnet-inference-opencv      # OpenCV推理服务（9.5MB）
+│   ├── cnet-agent                 # 主程序
+│   ├── cnet-inference-yolo        # YOLO 推理服务
+│   ├── cnet-inference-opencv      # OpenCV 推理服务
+│   └── cnet-gateway-data          # 数据网关服务
 ├── cmd/                           # 命令行程序
+│   ├── gateway/                   # 数据网关服务
+│   │   └── main.go
 │   └── inference/
 │       ├── yolo/                  # YOLO推理服务器
 │       │   └── main.go
@@ -547,20 +590,28 @@ cnet/
 │   ├── register/                  # 资源注册器（含触发式心跳）
 │   ├── manager/                   # 管理器（含Web UI）
 │   ├── scheduler/                 # 调度器（含委托逻辑）
-│   ├── workload/                  # Workload定义
+│   ├── workload/                  # Workload 定义
 │   │   ├── workload.go
 │   │   ├── process.go
 │   │   ├── container.go
-│   │   ├── mlmodel.go             # ML模型workload
-│   │   └── opencv.go              # OpenCV workload
+│   │   ├── mlmodel.go             # ML 模型 workload
+│   │   ├── opencv.go              # OpenCV workload
+│   │   └── data.go                # Data / DataGateway workload
 │   ├── executor/                  # 执行器
 │   │   ├── executor.go            # 基础接口
+│   │   ├── service_executor.go    # 服务型接口（统一契约）
 │   │   ├── process_executor.go
 │   │   ├── container_executor.go
-│   │   ├── mlmodel_executor.go    # ML模型接口
+│   │   ├── mlmodel_executor.go    # ML 模型接口（继承 ServiceExecutor）
 │   │   ├── mlmodel_executor_dispatcher.go  # 分发器
-│   │   ├── yolo_executor.go       # YOLO服务管理
-│   │   └── opencv_executor.go     # OpenCV服务管理
+│   │   ├── yolo_inference_executor.go      # YOLO 推理服务管理
+│   │   ├── opencv_inference_executor.go    # OpenCV 推理服务管理
+│   │   ├── data_executor.go               # Data 工作负载处理
+│   │   └── data_gateway_executor.go       # DataGateway 子进程管理
+│   ├── storage/                   # 存储抽象与实现
+│   │   ├── storage.go             # StorageBackend 接口与管理器
+│   │   ├── sqlite_backend.go      # SQLite + 文件系统实现
+│   │   └── errors.go              # 自定义错误
 │   ├── discovery/                 # 节点发现
 │   │   ├── parent.go              # 父节点连接（含触发式心跳）
 │   │   └── peer.go                # Peer发现
@@ -574,11 +625,7 @@ cnet/
 │       ├── css/
 │       └── js/
 │           └── app.js
-├── models/                        # 模型文件
-│   ├── yolo11n.onnx              # YOLO11n (10MB)
-│   ├── yolov8n.onnx              # YOLOv8n (12MB)
-│   └── yolov5s.onnx              # YOLOv5s (14MB)
-├── test_images/                   # 测试图片
+├── models/                        # 模型文件（示例，可选）
 ├── config.yaml                    # 默认配置
 ├── main.go                        # 入口文件
 ├── Makefile                       # 构建脚本
@@ -589,9 +636,9 @@ cnet/
 ## 架构特点
 
 1. **模块化设计**: Register、Scheduler、Manager职责清晰
-2. **ML模型即服务**: 部署=启动HTTP推理服务，持续运行
-3. **微服务架构**: 推理服务作为独立进程，进程隔离
-4. **实时资源同步**: 触发式心跳，2秒内同步资源变化
+2. **ML 模型即服务**: 部署=启动 HTTP 推理服务，持续运行
+3. **服务型架构统一**: ML 推理与数据网关均为 ServiceExecutor
+4. **实时资源同步**: 触发式心跳，2 秒内同步资源变化
 5. **智能调度**: 资源不足时自动委托给子节点或peer
 6. **健康保障**: 自动健康检查和服务重启
 7. **Web UI**: 实时展示节点状态、资源、workload
@@ -626,6 +673,11 @@ peers:
 logging:
   level: "info"           # 日志级别
   format: "json"          # 日志格式
+
+storage:
+  sqlite:
+    db_path: "/tmp/cnet_storage.db"   # 元数据数据库
+    data_path: "/tmp/cnet_data"       # 对象数据根目录
 ```
 
 ## 性能特点

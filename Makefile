@@ -22,6 +22,8 @@ build:
 	@echo "Build complete: $(BINARY_DIR)/cnet-inference-yolo"
 	$(GO) build $(GOFLAGS) -o $(BINARY_DIR)/cnet-inference-opencv cmd/inference/opencv/main.go
 	@echo "Build complete: $(BINARY_DIR)/cnet-inference-opencv"
+	$(GO) build $(GOFLAGS) -o $(BINARY_DIR)/cnet-gateway-data cmd/gateway/main.go
+	@echo "Build complete: $(BINARY_DIR)/cnet-gateway-data"
 
 # 运行
 run: build

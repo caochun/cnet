@@ -17,7 +17,7 @@ function dashboard() {
         // 动态表单数据
         formData: {
             name: '',
-            type: 'mlmodel',
+            type: 'data',
             config: {
                 // MLModel
                 model_type: 'yolo',
@@ -29,15 +29,27 @@ function dashboard() {
                 // Container
                 image: '',
                 // OpenCV
-                cascade_type: 'face'
+                cascade_type: 'face',
+                // Data
+                upload_method: 'file',
+                data_type: 'file',
+                access_mode: 'readonly',
+                tags: '',
+                download_url: '',
+                file_name: '',
+                file_path: ''
             },
             requirements: {
-                cpu: 2.0,
-                memory: 2048,
+                cpu: 0.1,
+                memory: 128,
                 gpu: 0,
                 storage: 0
             }
         },
+        
+        // 文件选择相关
+        selectedFile: null,
+        selectedDirectory: [],
         
         // 类型默认配置
         typeDefaults: {
@@ -56,6 +68,15 @@ function dashboard() {
             container: {
                 config: { image: 'nginx:alpine' },
                 requirements: { cpu: 1.0, memory: 512, gpu: 0, storage: 0 }
+            },
+            data: {
+                config: { 
+                    upload_method: 'file', 
+                    data_type: 'file', 
+                    access_mode: 'readonly',
+                    tags: ''
+                },
+                requirements: { cpu: 0.1, memory: 128, gpu: 0, storage: 0 }
             }
         },
         
@@ -165,6 +186,44 @@ function dashboard() {
             }
         },
         
+        // 文件选择处理
+        handleFileSelect(event) {
+            const file = event.target.files[0];
+            if (file) {
+                this.selectedFile = file;
+                this.formData.config.file_name = file.name;
+                // 自动计算存储需求
+                this.formData.requirements.storage = file.size;
+            }
+        },
+
+        // 目录选择处理
+        handleDirectorySelect(event) {
+            const files = Array.from(event.target.files);
+            if (files.length > 0) {
+                this.selectedDirectory = files;
+                this.formData.config.file_count = files.length;
+                this.formData.config.total_size = this.getTotalSize(files);
+                
+                // 自动计算存储需求
+                this.formData.requirements.storage = this.getTotalSize(files);
+            }
+        },
+
+        // 计算总大小
+        getTotalSize(files) {
+            return files.reduce((total, file) => total + file.size, 0);
+        },
+
+        // 格式化文件大小
+        formatFileSize(bytes) {
+            if (bytes === 0) return '0 Bytes';
+            const k = 1024;
+            const sizes = ['Bytes', 'KB', 'MB', 'GB', 'TB'];
+            const i = Math.floor(Math.log(bytes) / Math.log(k));
+            return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+        },
+
         // 构建特定类型的config对象
         buildConfig() {
             const config = {};
@@ -197,6 +256,29 @@ function dashboard() {
                 case 'container':
                     config.image = this.formData.config.image;
                     break;
+                    
+                case 'data':
+                    config.upload_method = this.formData.config.upload_method;
+                    config.data_type = this.formData.config.data_type;
+                    config.access_mode = this.formData.config.access_mode;
+                    
+                    // 处理标签
+                    if (this.formData.config.tags) {
+                        config.tags = this.formData.config.tags.split(',').map(t => t.trim()).filter(t => t);
+                    }
+                    
+                    if (this.formData.config.upload_method === 'file') {
+                        config.file_name = this.formData.config.file_name;
+                    } else if (this.formData.config.upload_method === 'url') {
+                        config.download_url = this.formData.config.download_url;
+                        config.file_name = this.formData.config.file_name;
+                    } else if (this.formData.config.upload_method === 'path') {
+                        config.file_path = this.formData.config.file_path;
+                    } else if (this.formData.config.upload_method === 'directory') {
+                        config.file_count = this.formData.config.file_count;
+                        config.total_size = this.formData.config.total_size;
+                    }
+                    break;
             }
             
             return config;
@@ -205,6 +287,18 @@ function dashboard() {
         // 提交工作负载
         async submitWorkload() {
             try {
+                // 如果是数据类型且是文件上传，使用FormData
+                if (this.formData.type === 'data' && this.formData.config.upload_method === 'file' && this.selectedFile) {
+                    await this.submitDataWorkload();
+                    return;
+                }
+                // 如果是数据类型且是目录上传，使用FormData（多文件）
+                if (this.formData.type === 'data' && this.formData.config.upload_method === 'directory' && this.selectedDirectory && this.selectedDirectory.length > 0) {
+                    await this.submitDataDirectoryWorkload();
+                    return;
+                }
+                
+                // 其他类型使用JSON
                 const workloadData = {
                     name: this.formData.name,
                     type: this.formData.type,
@@ -233,6 +327,8 @@ function dashboard() {
                     // 根据类型显示不同的成功消息
                     if (this.formData.type === 'mlmodel') {
                         alert(`ML模型部署成功！\n\nEndpoint: ${result.endpoint || 'N/A'}\n\n您可以通过此endpoint调用推理服务`);
+                    } else if (this.formData.type === 'data') {
+                        alert(`数据上传成功！\n\n数据键: ${result.data_key || 'N/A'}\n大小: ${this.formatFileSize(result.size || 0)}`);
                     } else {
                         alert('工作负载提交成功！');
                     }
@@ -243,6 +339,90 @@ function dashboard() {
             } catch (error) {
                 console.error('提交工作负载失败:', error);
                 alert('提交失败: ' + error.message);
+            }
+        },
+
+        // 提交数据workload（文件上传）
+        async submitDataWorkload() {
+            const formData = new FormData();
+            
+            // 基本信息
+            formData.append('name', this.formData.name);
+            formData.append('type', 'data');
+            formData.append('requirements', JSON.stringify({
+                cpu: parseFloat(this.formData.requirements.cpu),
+                memory: parseInt(this.formData.requirements.memory) * 1024 * 1024,
+                gpu: parseInt(this.formData.requirements.gpu),
+                storage: parseInt(this.formData.requirements.storage) // 文件大小已经是字节，不需要转换
+            }));
+            formData.append('config', JSON.stringify(this.buildConfig()));
+            
+            // 文件数据
+            formData.append('file', this.selectedFile);
+            
+            try {
+                const response = await fetch('/api/workloads', {
+                    method: 'POST',
+                    body: formData
+                });
+                
+                if (response.ok) {
+                    const result = await response.json();
+                    this.closeSubmitForm();
+                    await this.fetchWorkloads();
+                    
+                    alert(`数据上传成功！\n\n数据键: ${result.data_key || 'N/A'}\n大小: ${this.formatFileSize(result.size || 0)}`);
+                } else {
+                    const error = await response.json();
+                    alert('上传失败: ' + (error.error || error.details || '未知错误'));
+                }
+            } catch (error) {
+                console.error('上传失败:', error);
+                alert('上传失败: ' + error.message);
+            }
+        },
+
+        // 提交数据workload（目录上传）
+        async submitDataDirectoryWorkload() {
+            const formData = new FormData();
+
+            // 基本信息
+            formData.append('name', this.formData.name);
+            formData.append('type', 'data');
+            formData.append('requirements', JSON.stringify({
+                cpu: parseFloat(this.formData.requirements.cpu),
+                memory: parseInt(this.formData.requirements.memory) * 1024 * 1024,
+                gpu: parseInt(this.formData.requirements.gpu),
+                storage: parseInt(this.formData.requirements.storage) // 目录总大小（字节）
+            }));
+            // 明确指定目录上传
+            const cfg = { ...this.buildConfig(), upload_method: 'directory' };
+            formData.append('config', JSON.stringify(cfg));
+
+            // 追加所有文件，文件名使用相对路径，字段名必须为 'files'
+            for (const file of this.selectedDirectory) {
+                const rel = file.webkitRelativePath || file.name;
+                formData.append('files', file, rel);
+            }
+
+            try {
+                const response = await fetch('/api/workloads', {
+                    method: 'POST',
+                    body: formData
+                });
+
+                if (response.ok) {
+                    const result = await response.json();
+                    this.closeSubmitForm();
+                    await this.fetchWorkloads();
+                    alert(`目录上传成功！\n\n数据键: ${result.data_key || 'N/A'}\n大小: ${this.formatFileSize(result.size || 0)}\n路径: ${result.path || '-'}`);
+                } else {
+                    const error = await response.json();
+                    alert('上传失败: ' + (error.error || error.details || '未知错误'));
+                }
+            } catch (error) {
+                console.error('上传失败:', error);
+                alert('上传失败: ' + error.message);
             }
         },
         
@@ -256,10 +436,12 @@ function dashboard() {
         resetForm() {
             this.formData = {
                 name: '',
-                type: 'mlmodel',
-                config: { ...this.typeDefaults.mlmodel.config },
-                requirements: { ...this.typeDefaults.mlmodel.requirements }
+                type: 'data',
+                config: { ...this.typeDefaults.data.config },
+                requirements: { ...this.typeDefaults.data.requirements }
             };
+            this.selectedFile = null;
+            this.selectedDirectory = [];
         },
         
         // 停止工作负载

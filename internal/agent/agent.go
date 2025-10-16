@@ -9,6 +9,7 @@ import (
 	"cnet/internal/manager"
 	"cnet/internal/register"
 	"cnet/internal/scheduler"
+	"cnet/internal/storage"
 	"cnet/internal/workload"
 
 	"github.com/sirupsen/logrus"
@@ -28,6 +29,9 @@ type AgentConfig struct {
 	// Peer节点配置
 	PeerEnabled bool
 	PeerAddrs   []string
+
+	// 存储配置
+	Storage storage.StorageConfig
 }
 
 // Agent CNET Agent
@@ -38,10 +42,11 @@ type Agent struct {
 	cancel context.CancelFunc
 
 	// 核心组件
-	register    *register.Register
-	scheduler   *scheduler.Scheduler
-	manager     *manager.Manager
-	execFactory *executor.ExecutorFactory
+	register       *register.Register
+	scheduler      *scheduler.Scheduler
+	manager        *manager.Manager
+	execFactory    *executor.ExecutorFactory
+	storageManager *storage.StorageManager
 
 	// 节点发现
 	parentConn *discovery.ParentConnector
@@ -55,12 +60,27 @@ func NewAgent(config *AgentConfig, logger *logrus.Logger) (*Agent, error) {
 	// 创建Register
 	reg := register.NewRegister(config.NodeID, config.Resources, logger)
 
+	// 创建StorageManager
+	storageManager := storage.NewStorageManager(config.Storage)
+
+	// 创建SQLite后端
+	sqliteBackend, err := storage.NewSQLiteBackend(
+		config.Storage.SQLite.DBPath,
+		config.Storage.SQLite.DataPath,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create SQLite backend: %w", err)
+	}
+	storageManager.RegisterBackend("sqlite", sqliteBackend)
+
 	// 创建Executor工厂
 	execFactory := executor.NewExecutorFactory()
 	execFactory.Register(workload.TypeProcess, executor.NewProcessExecutor(logger))
 	execFactory.Register(workload.TypeContainer, executor.NewContainerExecutor(logger))
-	execFactory.Register(workload.TypeOpenCV, executor.NewOpenCVExecutor(logger))
+	execFactory.Register(workload.TypeOpenCV, executor.NewOpenCVInferenceExecutor(logger))
 	execFactory.Register(workload.TypeMLModel, executor.NewMLModelExecutorDispatcher(logger))
+	execFactory.Register(workload.TypeData, executor.NewDataExecutor(storageManager, logger))
+	execFactory.Register(workload.TypeDataGateway, executor.NewDataGatewayExecutor(logger))
 
 	// 创建Scheduler
 	sched := scheduler.NewScheduler(logger, reg, execFactory)
@@ -69,14 +89,15 @@ func NewAgent(config *AgentConfig, logger *logrus.Logger) (*Agent, error) {
 	mgr := manager.NewManager(logger, sched, reg)
 
 	agent := &Agent{
-		config:      config,
-		logger:      logger,
-		ctx:         ctx,
-		cancel:      cancel,
-		register:    reg,
-		scheduler:   sched,
-		manager:     mgr,
-		execFactory: execFactory,
+		config:         config,
+		logger:         logger,
+		ctx:            ctx,
+		cancel:         cancel,
+		register:       reg,
+		scheduler:      sched,
+		manager:        mgr,
+		execFactory:    execFactory,
+		storageManager: storageManager,
 	}
 
 	// 创建父节点连接器（如果启用）
@@ -88,7 +109,7 @@ func NewAgent(config *AgentConfig, logger *logrus.Logger) (*Agent, error) {
 			nodeAddr = fmt.Sprintf("localhost:%d", config.Port)
 		}
 		agent.parentConn = discovery.NewParentConnector(logger, reg, config.ParentAddr, config.NodeID, nodeAddr)
-		
+
 		// 设置资源变化回调 - 资源变化时立即通知父节点
 		reg.SetResourceChangeCallback(func() {
 			agent.parentConn.TriggerHeartbeat()

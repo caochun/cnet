@@ -24,7 +24,7 @@ func NewMLModelExecutorDispatcher(logger *logrus.Logger) *MLModelExecutorDispatc
 	}
 
 	// 注册各种ML模型executor
-	dispatcher.RegisterExecutor("yolo", NewYOLOExecutor(logger))
+	dispatcher.RegisterExecutor("yolo", NewYOLOInferenceExecutor(logger))
 	// dispatcher.RegisterExecutor("tensorflow", NewTensorFlowExecutor(logger))
 	// dispatcher.RegisterExecutor("pytorch", NewPyTorchExecutor(logger))
 

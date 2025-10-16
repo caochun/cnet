@@ -69,6 +69,12 @@ func (m *Manager) SubmitWorkload(ctx context.Context, req *workload.CreateWorklo
 	case workload.TypeOpenCV:
 		w = workload.NewOpenCVWorkload(req.Name, *req)
 
+	case workload.TypeData:
+		w = workload.NewDataWorkload(req.Name, *req)
+
+	case workload.TypeDataGateway:
+		w = workload.NewDataGatewayWorkload(req.Name, *req)
+
 	default:
 		return nil, fmt.Errorf("unsupported workload type: %s", req.Type)
 	}

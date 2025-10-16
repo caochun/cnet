@@ -9,10 +9,12 @@ import (
 type WorkloadType string
 
 const (
-	TypeContainer WorkloadType = "container"
-	TypeProcess   WorkloadType = "process"
-	TypeMLModel   WorkloadType = "mlmodel"
-	TypeOpenCV    WorkloadType = "opencv"
+	TypeContainer   WorkloadType = "container"
+	TypeProcess     WorkloadType = "process"
+	TypeMLModel     WorkloadType = "mlmodel"
+	TypeOpenCV      WorkloadType = "opencv"
+	TypeData        WorkloadType = "data"
+	TypeDataGateway WorkloadType = "datagateway"
 )
 
 // WorkloadStatus workload状态

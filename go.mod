@@ -10,6 +10,7 @@ require (
 )
 
 require (
+	github.com/mattn/go-sqlite3 v1.14.32 // indirect
 	github.com/stretchr/testify v1.8.4 // indirect
 	gocv.io/x/gocv v0.42.0 // indirect
 	golang.org/x/sys v0.15.0 // indirect

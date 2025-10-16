@@ -25,6 +25,13 @@ peers:
     - "peer-1:8080"
     - "peer-2:8080"
 
+# 存储配置
+storage:
+  type: "sqlite"
+  sqlite:
+    db_path: "/tmp/cnet_storage.db"
+    data_path: "/tmp/cnet_data"
+
 # 日志配置
 logging:
   level: "info"  # debug, info, warn, error

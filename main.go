@@ -13,6 +13,7 @@ import (
 	"cnet/internal/agent"
 	"cnet/internal/manager"
 	"cnet/internal/register"
+	"cnet/internal/storage"
 
 	"github.com/sirupsen/logrus"
 	"gopkg.in/yaml.v3"
@@ -42,6 +43,14 @@ type Config struct {
 		Enabled   bool     `yaml:"enabled"`
 		Addresses []string `yaml:"addresses"`
 	} `yaml:"peers"`
+
+	Storage struct {
+		Type   string `yaml:"type"`
+		SQLite struct {
+			DBPath   string `yaml:"db_path"`
+			DataPath string `yaml:"data_path"`
+		} `yaml:"sqlite"`
+	} `yaml:"storage"`
 
 	Logging struct {
 		Level  string `yaml:"level"`
@@ -79,6 +88,13 @@ func main() {
 		ParentAddr:    config.Parent.Address,
 		PeerEnabled:   config.Peers.Enabled,
 		PeerAddrs:     config.Peers.Addresses,
+		Storage: storage.StorageConfig{
+			Type: config.Storage.Type,
+			SQLite: storage.SQLiteConfig{
+				DBPath:   config.Storage.SQLite.DBPath,
+				DataPath: config.Storage.SQLite.DataPath,
+			},
+		},
 	}
 
 	// 创建Agent

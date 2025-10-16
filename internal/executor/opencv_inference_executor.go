@@ -14,9 +14,9 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
-// OpenCVExecutor OpenCV推理服务执行器
+// OpenCVInferenceExecutor OpenCV推理服务执行器
 // 管理OpenCV HTTP推理服务进程
-type OpenCVExecutor struct {
+type OpenCVInferenceExecutor struct {
 	logger   *logrus.Logger
 	mu       sync.RWMutex
 	services map[string]*OpenCVService // workload_id -> service
@@ -36,23 +36,23 @@ type OpenCVService struct {
 	cancel          context.CancelFunc
 }
 
-// NewOpenCVExecutor 创建OpenCV执行器
-func NewOpenCVExecutor(logger *logrus.Logger) *OpenCVExecutor {
-	return &OpenCVExecutor{
+// NewOpenCVInferenceExecutor 创建OpenCV推理执行器
+func NewOpenCVInferenceExecutor(logger *logrus.Logger) *OpenCVInferenceExecutor {
+	return &OpenCVInferenceExecutor{
 		logger:   logger,
 		services: make(map[string]*OpenCVService),
 	}
 }
 
 // Init 初始化OpenCV执行器
-func (e *OpenCVExecutor) Init(ctx context.Context) error {
+func (e *OpenCVInferenceExecutor) Init(ctx context.Context) error {
 	e.logger.Info("OpenCV Executor initialized")
 	// TODO: 可以在这里检查GoCV依赖、OpenCV版本等
 	return nil
 }
 
 // Execute 执行OpenCV workload - 启动推理服务
-func (e *OpenCVExecutor) Execute(ctx context.Context, w workload.Workload) error {
+func (e *OpenCVInferenceExecutor) Execute(ctx context.Context, w workload.Workload) error {
 	ow, ok := w.(*workload.OpenCVWorkload)
 	if !ok {
 		return fmt.Errorf("invalid workload type, expected OpenCVWorkload")
@@ -93,7 +93,7 @@ func (e *OpenCVExecutor) Execute(ctx context.Context, w workload.Workload) error
 }
 
 // startService 启动OpenCV推理服务进程
-func (e *OpenCVExecutor) startService(ctx context.Context, ow *workload.OpenCVWorkload) (*OpenCVService, error) {
+func (e *OpenCVInferenceExecutor) startService(ctx context.Context, ow *workload.OpenCVWorkload) (*OpenCVService, error) {
 	serviceCtx, cancel := context.WithCancel(ctx)
 
 	// 构造启动命令（不使用CommandContext，避免自动kill）
@@ -109,7 +109,7 @@ func (e *OpenCVExecutor) startService(ctx context.Context, ow *workload.OpenCVWo
 
 	// 设置工作目录和输出
 	cmd.Dir = "." // 当前目录
-	
+
 	// 创建日志文件捕获输出
 	logFile := fmt.Sprintf("opencv_service_%d.log", ow.ServicePort)
 	outFile, err := os.Create(logFile)
@@ -149,7 +149,7 @@ func (e *OpenCVExecutor) startService(ctx context.Context, ow *workload.OpenCVWo
 }
 
 // waitForService 等待服务启动
-func (e *OpenCVExecutor) waitForService(service *OpenCVService, timeout time.Duration) error {
+func (e *OpenCVInferenceExecutor) waitForService(service *OpenCVService, timeout time.Duration) error {
 	deadline := time.Now().Add(timeout)
 
 	for time.Now().Before(deadline) {
@@ -163,7 +163,7 @@ func (e *OpenCVExecutor) waitForService(service *OpenCVService, timeout time.Dur
 }
 
 // checkServiceHealth 检查服务健康状态
-func (e *OpenCVExecutor) checkServiceHealth(service *OpenCVService) error {
+func (e *OpenCVInferenceExecutor) checkServiceHealth(service *OpenCVService) error {
 	resp, err := http.Get(service.endpoint + "/health")
 	if err != nil {
 		return err
@@ -179,7 +179,7 @@ func (e *OpenCVExecutor) checkServiceHealth(service *OpenCVService) error {
 }
 
 // startHealthCheck 启动健康检查
-func (e *OpenCVExecutor) startHealthCheck(service *OpenCVService) {
+func (e *OpenCVInferenceExecutor) startHealthCheck(service *OpenCVService) {
 	service.healthTicker = time.NewTicker(30 * time.Second)
 
 	for {
@@ -203,7 +203,7 @@ func (e *OpenCVExecutor) startHealthCheck(service *OpenCVService) {
 }
 
 // restartService 重启服务
-func (e *OpenCVExecutor) restartService(workloadID string) error {
+func (e *OpenCVInferenceExecutor) restartService(workloadID string) error {
 	e.mu.Lock()
 	defer e.mu.Unlock()
 
@@ -227,15 +227,12 @@ func (e *OpenCVExecutor) restartService(workloadID string) error {
 		service.process.Process.Kill()
 	}
 
-	// TODO: 重新启动服务
-	// 需要获取原始的workload信息来重新启动
-	// 暂时返回错误，完整实现需要保存workload引用
-
+	// TODO: 重新启动服务（需要保留原始参数）
 	return fmt.Errorf("restart not fully implemented")
 }
 
 // Stop 停止OpenCV workload
-func (e *OpenCVExecutor) Stop(ctx context.Context, w workload.Workload) error {
+func (e *OpenCVInferenceExecutor) Stop(ctx context.Context, w workload.Workload) error {
 	e.mu.Lock()
 	defer e.mu.Unlock()
 
@@ -272,13 +269,13 @@ func (e *OpenCVExecutor) Stop(ctx context.Context, w workload.Workload) error {
 }
 
 // GetLogs 获取OpenCV服务日志
-func (e *OpenCVExecutor) GetLogs(ctx context.Context, w workload.Workload, lines int) ([]string, error) {
+func (e *OpenCVInferenceExecutor) GetLogs(ctx context.Context, w workload.Workload, lines int) ([]string, error) {
 	// TODO: 实现日志获取（从进程stdout/stderr）
 	return []string{"OpenCV service logs (not implemented)"}, nil
 }
 
 // GetStatus 获取OpenCV服务状态
-func (e *OpenCVExecutor) GetStatus(ctx context.Context, w workload.Workload) (workload.WorkloadStatus, error) {
+func (e *OpenCVInferenceExecutor) GetStatus(ctx context.Context, w workload.Workload) (workload.WorkloadStatus, error) {
 	e.mu.RLock()
 	defer e.mu.RUnlock()
 
@@ -300,8 +297,13 @@ func (e *OpenCVExecutor) GetStatus(ctx context.Context, w workload.Workload) (wo
 	return w.GetStatus(), nil
 }
 
-// GetInferenceEndpoint 获取推理服务endpoint
-func (e *OpenCVExecutor) GetInferenceEndpoint(workloadID string) (string, error) {
+// 兼容旧名：内部代理到 GetEndpoint（可逐步移除调用方）
+func (e *OpenCVInferenceExecutor) GetInferenceEndpoint(workloadID string) (string, error) {
+	return e.GetEndpoint(workloadID)
+}
+
+// GetEndpoint 返回服务访问地址（满足 ServiceExecutor 接口）
+func (e *OpenCVInferenceExecutor) GetEndpoint(workloadID string) (string, error) {
 	e.mu.RLock()
 	defer e.mu.RUnlock()
 
@@ -309,12 +311,11 @@ func (e *OpenCVExecutor) GetInferenceEndpoint(workloadID string) (string, error)
 	if !exists {
 		return "", fmt.Errorf("service not found: %s", workloadID)
 	}
-
 	return service.endpoint, nil
 }
 
 // HealthCheck 检查推理服务健康状态
-func (e *OpenCVExecutor) HealthCheck(ctx context.Context, workloadID string) error {
+func (e *OpenCVInferenceExecutor) HealthCheck(ctx context.Context, workloadID string) error {
 	e.mu.RLock()
 	service, exists := e.services[workloadID]
 	e.mu.RUnlock()

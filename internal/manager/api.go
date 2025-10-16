@@ -1,14 +1,21 @@
 package manager
 
 import (
+	"crypto/md5"
+	"encoding/hex"
 	"encoding/json"
+	"fmt"
+	"io"
 	"net/http"
+	"os"
 	"path/filepath"
 	"strconv"
+	"time"
 
 	"cnet/internal/register"
 	"cnet/internal/workload"
 
+	"github.com/google/uuid"
 	"github.com/gorilla/mux"
 	"github.com/sirupsen/logrus"
 )
@@ -89,19 +96,209 @@ func (a *API) handleHomePage(w http.ResponseWriter, r *http.Request) {
 
 // handleSubmitWorkload 提交workload
 func (a *API) handleSubmitWorkload(w http.ResponseWriter, r *http.Request) {
-	var req workload.CreateWorkloadRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		a.writeError(w, http.StatusBadRequest, "Invalid request body", err)
+	// 检查Content-Type
+	contentType := r.Header.Get("Content-Type")
+
+	if contentType == "application/json" {
+		// JSON请求
+		var req workload.CreateWorkloadRequest
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			a.writeError(w, http.StatusBadRequest, "Invalid request body", err)
+			return
+		}
+
+		wl, err := a.manager.SubmitWorkload(r.Context(), &req)
+		if err != nil {
+			a.writeError(w, http.StatusInternalServerError, "Failed to submit workload", err)
+			return
+		}
+
+		a.writeJSON(w, http.StatusCreated, wl)
+	} else if contentType == "multipart/form-data" || (len(contentType) > 0 && contentType[:19] == "multipart/form-data") {
+		// 文件上传请求（数据workload）
+		a.handleDataWorkloadUpload(w, r)
+	} else {
+		a.writeError(w, http.StatusBadRequest, "Unsupported content type", nil)
+		return
+	}
+}
+
+// handleDataWorkloadUpload 处理数据workload文件上传（multipart/form-data）
+func (a *API) handleDataWorkloadUpload(w http.ResponseWriter, r *http.Request) {
+	// 解析multipart表单
+	if err := r.ParseMultipartForm(64 << 20); err != nil { // 64MB
+		a.writeError(w, http.StatusBadRequest, "Failed to parse multipart form", err)
 		return
 	}
 
-	wl, err := a.manager.SubmitWorkload(r.Context(), &req)
+	name := r.FormValue("name")
+	if name == "" {
+		name = fmt.Sprintf("data-%s", time.Now().Format("20060102150405"))
+	}
+
+	// 解析requirements
+	var reqRes register.ResourceRequirements
+	if v := r.FormValue("requirements"); v != "" {
+		_ = json.Unmarshal([]byte(v), &reqRes)
+	}
+
+	// 解析config（除文件内容外）
+	var cfg map[string]interface{}
+	if v := r.FormValue("config"); v != "" {
+		_ = json.Unmarshal([]byte(v), &cfg)
+	} else {
+		cfg = map[string]interface{}{}
+	}
+
+	// 判断上传方式
+	uploadMethod := "file"
+	if m, ok := cfg["upload_method"].(string); ok && m != "" {
+		uploadMethod = m
+	}
+
+	dataKey := uuid.New().String()
+
+	// 如果表单里实际包含多文件字段名 "files"，强制按目录上传处理
+	if r.MultipartForm != nil {
+		if fs, ok := r.MultipartForm.File["files"]; ok && len(fs) > 0 {
+			uploadMethod = "directory"
+		}
+	}
+
+	if uploadMethod == "directory" {
+		// 目录上传：字段名 should be "files"
+		files := r.MultipartForm.File["files"]
+		if len(files) == 0 {
+			a.writeError(w, http.StatusBadRequest, "no files provided for directory upload", nil)
+			return
+		}
+
+		finalBase := filepath.Join("/tmp/cnet_data", dataKey)
+		if err := os.MkdirAll(finalBase, 0755); err != nil {
+			a.writeError(w, http.StatusInternalServerError, "Failed to create final dir", err)
+			return
+		}
+
+		var totalSize int64
+		for _, fh := range files {
+			rel := fh.Filename // 前端应传相对路径
+			dstPath := filepath.Join(finalBase, rel)
+			if err := os.MkdirAll(filepath.Dir(dstPath), 0755); err != nil {
+				a.writeError(w, http.StatusInternalServerError, "Failed to create subdir", err)
+				return
+			}
+			src, err := fh.Open()
+			if err != nil {
+				a.writeError(w, http.StatusInternalServerError, "Failed to open uploaded file", err)
+				return
+			}
+			out, err := os.Create(dstPath)
+			if err != nil {
+				src.Close()
+				a.writeError(w, http.StatusInternalServerError, "Failed to create file", err)
+				return
+			}
+			n, err := io.Copy(out, src)
+			src.Close()
+			out.Close()
+			if err != nil {
+				a.writeError(w, http.StatusInternalServerError, "Failed to save uploaded file", err)
+				return
+			}
+			totalSize += n
+		}
+
+		// 构造目录型workload
+		cfg["upload_method"] = "directory"
+		cfg["directory_path"] = finalBase
+		cfg["file_count"] = len(files)
+		cfg["total_size"] = totalSize
+		cfg["data_key"] = dataKey
+		if _, exists := cfg["data_type"]; !exists {
+			cfg["data_type"] = "dataset"
+		}
+
+		req := &workload.CreateWorkloadRequest{
+			Name:         name,
+			Type:         workload.TypeData,
+			Requirements: reqRes,
+			Config:       cfg,
+		}
+		wl, err := a.manager.SubmitWorkload(r.Context(), req)
+		if err != nil {
+			a.writeError(w, http.StatusInternalServerError, "Failed to submit data workload", err)
+			return
+		}
+		a.writeJSON(w, http.StatusCreated, map[string]interface{}{
+			"workload": wl,
+			"data_key": dataKey,
+			"size":     totalSize,
+			"status":   "uploaded",
+			"path":     finalBase,
+		})
+		return
+	}
+
+	// 单文件上传路径（保持原逻辑）
+	file, header, err := r.FormFile("file")
 	if err != nil {
-		a.writeError(w, http.StatusInternalServerError, "Failed to submit workload", err)
+		a.writeError(w, http.StatusBadRequest, "file field is required", err)
 		return
 	}
+	defer file.Close()
 
-	a.writeJSON(w, http.StatusCreated, wl)
+	hasher := md5.New()
+	tee := io.TeeReader(file, hasher)
+	tmpDir := os.TempDir()
+	tmpPath := filepath.Join(tmpDir, "cnet_uploads", dataKey)
+	if err := os.MkdirAll(tmpPath, 0755); err != nil {
+		a.writeError(w, http.StatusInternalServerError, "Failed to create temp dir", err)
+		return
+	}
+	dstPath := filepath.Join(tmpPath, header.Filename)
+	out, err := os.Create(dstPath)
+	if err != nil {
+		a.writeError(w, http.StatusInternalServerError, "Failed to create temp file", err)
+		return
+	}
+	if _, err := io.Copy(out, tee); err != nil {
+		out.Close()
+		a.writeError(w, http.StatusInternalServerError, "Failed to store upload", err)
+		return
+	}
+	out.Close()
+	fileHash := hex.EncodeToString(hasher.Sum(nil))
+
+	cfg["upload_method"] = "path"
+	cfg["source_path"] = dstPath
+	cfg["file_name"] = header.Filename
+	cfg["data_key"] = dataKey
+	if _, exists := cfg["data_type"]; !exists {
+		cfg["data_type"] = "file"
+	}
+
+	req := &workload.CreateWorkloadRequest{
+		Name:         name,
+		Type:         workload.TypeData,
+		Requirements: reqRes,
+		Config:       cfg,
+	}
+	wl, err := a.manager.SubmitWorkload(r.Context(), req)
+	if err != nil {
+		a.writeError(w, http.StatusInternalServerError, "Failed to submit data workload", err)
+		return
+	}
+	// 最终持久化路径（与执行器保持一致）
+	finalPath := filepath.Join("/tmp/cnet_data", dataKey, header.Filename)
+
+	a.writeJSON(w, http.StatusCreated, map[string]interface{}{
+		"workload": wl,
+		"data_key": dataKey,
+		"size":     header.Size,
+		"hash":     fileHash,
+		"status":   "uploaded",
+		"path":     finalPath,
+	})
 }
 
 // handleListWorkloads 列出所有workload

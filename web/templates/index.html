@@ -238,6 +238,7 @@
                                         <option value="container">容器 (Container)</option>
                                         <option value="mlmodel">ML模型 (MLModel)</option>
                                         <option value="opencv">OpenCV推理</option>
+                                        <option value="data">数据 (Data)</option>
                                     </select>
                                 </div>
                             </div>
@@ -320,6 +321,129 @@
                                     <input x-model="formData.config.image" type="text"
                                            class="block w-full border-gray-300 rounded-md shadow-sm focus:ring-primary-500 focus:border-primary-500 sm:text-sm"
                                            placeholder="nginx:alpine">
+                                </div>
+                            </div>
+
+                            <!-- Data特定配置 -->
+                            <div x-show="formData.type === 'data'" class="border-l-4 border-indigo-500 pl-4 py-3 bg-indigo-50 rounded">
+                                <h5 class="text-sm font-semibold text-gray-900 mb-3">📁 数据配置</h5>
+                                
+                                <!-- 上传方式选择 -->
+                                <div class="mb-4">
+                                    <label class="block text-sm font-medium text-gray-700 mb-2">上传方式</label>
+                                    <div class="flex space-x-4">
+                                        <label class="flex items-center">
+                                            <input type="radio" x-model="formData.config.upload_method" value="file" class="mr-2">
+                                            文件上传
+                                        </label>
+                                        <label class="flex items-center">
+                                            <input type="radio" x-model="formData.config.upload_method" value="url" class="mr-2">
+                                            URL下载
+                                        </label>
+                                        <label class="flex items-center">
+                                            <input type="radio" x-model="formData.config.upload_method" value="path" class="mr-2">
+                                            本地路径
+                                        </label>
+                                        <label class="flex items-center">
+                                            <input type="radio" x-model="formData.config.upload_method" value="directory" class="mr-2">
+                                            目录上传
+                                        </label>
+                                    </div>
+                                </div>
+
+                                <!-- 文件上传 -->
+                                <div x-show="formData.config.upload_method === 'file'" class="space-y-3">
+                                    <div>
+                                        <label class="block text-sm font-medium text-gray-700 mb-1">选择文件</label>
+                                        <input type="file" @change="handleFileSelect" 
+                                               class="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100">
+                                    </div>
+                                    <div x-show="selectedFile" class="text-sm text-gray-600">
+                                        <p>文件名: <span x-text="selectedFile?.name"></span></p>
+                                        <p>大小: <span x-text="formatFileSize(selectedFile?.size)"></span></p>
+                                    </div>
+                                </div>
+
+                                <!-- URL下载 -->
+                                <div x-show="formData.config.upload_method === 'url'" class="space-y-3">
+                                    <div>
+                                        <label class="block text-sm font-medium text-gray-700 mb-1">下载URL</label>
+                                        <input x-model="formData.config.download_url" type="url"
+                                               class="block w-full border-gray-300 rounded-md shadow-sm focus:ring-primary-500 focus:border-primary-500 sm:text-sm"
+                                               placeholder="https://example.com/dataset.zip">
+                                    </div>
+                                    <div>
+                                        <label class="block text-sm font-medium text-gray-700 mb-1">文件名 (可选)</label>
+                                        <input x-model="formData.config.file_name" type="text"
+                                               class="block w-full border-gray-300 rounded-md shadow-sm focus:ring-primary-500 focus:border-primary-500 sm:text-sm"
+                                               placeholder="dataset.zip">
+                                    </div>
+                                </div>
+
+                                <!-- 本地路径 -->
+                                <div x-show="formData.config.upload_method === 'path'" class="space-y-3">
+                                    <div>
+                                        <label class="block text-sm font-medium text-gray-700 mb-1">文件路径</label>
+                                        <input x-model="formData.config.file_path" type="text"
+                                               class="block w-full border-gray-300 rounded-md shadow-sm focus:ring-primary-500 focus:border-primary-500 sm:text-sm"
+                                               placeholder="/path/to/dataset.zip">
+                                    </div>
+                                </div>
+
+                                <!-- 目录上传 -->
+                                <div x-show="formData.config.upload_method === 'directory'" class="space-y-3">
+                                    <div>
+                                        <label class="block text-sm font-medium text-gray-700 mb-1">选择目录</label>
+                                        <input type="file" @change="handleDirectorySelect" webkitdirectory multiple
+                                               class="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100">
+                                        <p class="mt-1 text-xs text-gray-500">💡 选择目录后会自动包含所有子文件和子目录</p>
+                                    </div>
+                                    
+                                    <!-- 目录预览 -->
+                                    <div x-show="selectedDirectory.length > 0" class="border rounded-lg p-3 bg-gray-50">
+                                        <h6 class="text-sm font-medium text-gray-700 mb-2">目录预览</h6>
+                                        <div class="max-h-40 overflow-y-auto text-xs">
+                                            <div x-for="file in selectedDirectory" :key="file.webkitRelativePath" 
+                                                 class="flex justify-between items-center py-1">
+                                                <span x-text="file.webkitRelativePath" class="text-gray-600"></span>
+                                                <span x-text="formatFileSize(file.size)" class="text-gray-500"></span>
+                                            </div>
+                                        </div>
+                                        <div class="mt-2 text-xs text-gray-500">
+                                            共 <span x-text="selectedDirectory.length"></span> 个文件，总大小 <span x-text="formatFileSize(getTotalSize())"></span>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- 数据配置 -->
+                                <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
+                                    <div>
+                                        <label class="block text-sm font-medium text-gray-700 mb-1">数据类型</label>
+                                        <select x-model="formData.config.data_type"
+                                                class="block w-full border-gray-300 rounded-md shadow-sm focus:ring-primary-500 focus:border-primary-500 sm:text-sm">
+                                            <option value="file">单个文件</option>
+                                            <option value="dataset">数据集</option>
+                                            <option value="model">模型文件</option>
+                                            <option value="config">配置文件</option>
+                                        </select>
+                                    </div>
+                                    <div>
+                                        <label class="block text-sm font-medium text-gray-700 mb-1">访问模式</label>
+                                        <select x-model="formData.config.access_mode"
+                                                class="block w-full border-gray-300 rounded-md shadow-sm focus:ring-primary-500 focus:border-primary-500 sm:text-sm">
+                                            <option value="readonly">只读</option>
+                                            <option value="readwrite">读写</option>
+                                            <option value="exclusive">独占</option>
+                                        </select>
+                                    </div>
+                                </div>
+
+                                <!-- 标签 -->
+                                <div class="mt-4">
+                                    <label class="block text-sm font-medium text-gray-700 mb-1">标签 (用逗号分隔)</label>
+                                    <input x-model="formData.config.tags" type="text"
+                                           class="block w-full border-gray-300 rounded-md shadow-sm focus:ring-primary-500 focus:border-primary-500 sm:text-sm"
+                                           placeholder="dataset,training,images">
                                 </div>
                             </div>
 
