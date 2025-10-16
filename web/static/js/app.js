@@ -8,6 +8,9 @@ function dashboard() {
         localResources: { cpu: 0, memory: 0, gpu: 0, storage: 0 },
         workloads: [],
         lastUpdate: '',
+            // DataGateway 环境
+            gatewayEndpoint: '',
+            gatewayBucket: 'cnet',
         
         // UI状态
         showSubmitForm: false,
@@ -77,6 +80,16 @@ function dashboard() {
                     tags: ''
                 },
                 requirements: { cpu: 0.1, memory: 128, gpu: 0, storage: 0 }
+            },
+            datagateway: {
+                config: {
+                    service_port: 9091,
+                    service_host: '127.0.0.1',
+                    base_path: '/tmp/cnet_data',
+                    bucket: 'cnet',
+                    auth_token: ''
+                },
+                requirements: { cpu: 0.2, memory: 128, gpu: 0, storage: 0 }
             }
         },
         
@@ -159,6 +172,14 @@ function dashboard() {
                 const response = await fetch('/api/workloads');
                 const data = await response.json();
                 this.workloads = data.workloads || [];
+                // 记录首个运行中的 DataGateway 入口与 bucket
+                const gw = this.workloads.find(w => w.type === 'datagateway' && w.status === 'running');
+                if (gw && gw.endpoint) {
+                    this.gatewayEndpoint = gw.endpoint;
+                    if (gw.config && gw.config.bucket) {
+                        this.gatewayBucket = gw.config.bucket;
+                    }
+                }
             } catch (error) {
                 console.error('获取工作负载失败:', error);
             }
@@ -279,6 +300,15 @@ function dashboard() {
                         config.total_size = this.formData.config.total_size;
                     }
                     break;
+                case 'datagateway':
+                    config.service_port = parseInt(this.formData.config.service_port);
+                    config.service_host = this.formData.config.service_host || '127.0.0.1';
+                    config.base_path = this.formData.config.base_path || '/tmp/cnet_data';
+                    config.bucket = this.formData.config.bucket || 'cnet';
+                    if (this.formData.config.auth_token) {
+                        config.auth_token = this.formData.config.auth_token;
+                    }
+                    break;
             }
             
             return config;
@@ -327,6 +357,8 @@ function dashboard() {
                     // 根据类型显示不同的成功消息
                     if (this.formData.type === 'mlmodel') {
                         alert(`ML模型部署成功！\n\nEndpoint: ${result.endpoint || 'N/A'}\n\n您可以通过此endpoint调用推理服务`);
+                    } else if (this.formData.type === 'datagateway') {
+                        alert(`数据网关已启动！\n\nEndpoint: ${result.endpoint || 'N/A'}\n\nS3 列举: ${result.endpoint || ''}/s3/${this.formData.config.bucket || 'cnet'}?list-type=2`);
                     } else if (this.formData.type === 'data') {
                         alert(`数据上传成功！\n\n数据键: ${result.data_key || 'N/A'}\n大小: ${this.formatFileSize(result.size || 0)}`);
                     } else {
@@ -473,6 +505,29 @@ function dashboard() {
             } catch (error) {
                 console.error('获取工作负载详情失败:', error);
                 alert('获取详情失败: ' + error.message);
+            }
+        },
+        
+        // 生成 Data 直链/列举链接（基于运行中的 DataGateway）
+        buildDataLinks(selected) {
+            if (!this.gatewayEndpoint || !selected || !selected.config) return null;
+            const dataKey = selected.config.data_key || selected.data_key;
+            if (!dataKey) return null;
+            const bucket = this.gatewayBucket || 'cnet';
+            const listUrl = `${this.gatewayEndpoint}/s3/${bucket}?list-type=2&prefix=${encodeURIComponent(dataKey)}`;
+            // 文件名未知时仅返回列举链接；若存在 file_name/path 也补充下载示例
+            const name = selected.config.file_name || selected.file_name || '';
+            const downloadUrl = name ? `${this.gatewayEndpoint}/s3/${bucket}/${encodeURIComponent(dataKey)}/${encodeURIComponent(name)}` : '';
+            return { listUrl, downloadUrl, bucket, dataKey };
+        },
+        
+        // 复制到剪贴板
+        async copyToClipboard(text) {
+            try {
+                await navigator.clipboard.writeText(text);
+                alert('已复制到剪贴板');
+            } catch (e) {
+                console.error('复制失败', e);
             }
         },
         
