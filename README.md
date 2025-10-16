@@ -4,25 +4,52 @@ CNET Agent 是一个分布式资源管理和任务调度系统，支持进程、
 
 ## 核心架构
 
-### 三大核心组件
+### 核心组件（职责清晰边界）
 
-1. **Register（资源注册器）**
-   - 管理本地资源（CPU、GPU、Memory、Storage）
-   - 维护子节点和peer节点的资源信息（树状结构）
-   - 提供资源分配和释放功能
-   - **触发式心跳**：资源变化时立即通知父节点（2秒内同步）
+1) **Register（资源注册器）**
+   - 统一维护本节点与全局视角的资源视图（CPU/GPU/内存/存储）
+   - 提供资源分配与释放接口，支持配额化管理
+   - 维护父/子/Peer 节点资源快照（层次化+P2P 拓扑）
+   - 资源变化触发心跳上报（近实时同步）
 
-2. **Scheduler（调度器）**
-   - 根据Register的资源信息做出调度决策
-   - 本地资源充足时在本地执行
-   - 本地资源不足时委托给子节点或peer节点
-   - 支持多种调度策略
+2) **Scheduler（调度器）**
+   - 负责“在哪儿执行”的决策：本地/子节点/Peer
+   - 基于 Register 的资源视图与策略（优先本地、最少负载、亲和/反亲和等）
+   - 成功决策后调用 Register 分配资源，失败则回退/重试/委托
 
-3. **Manager（管理器）**
-   - 接收用户的workload请求
-   - 验证和管理workload生命周期
-   - 协调Scheduler进行调度
-   - 提供RESTful API和Web UI
+3) **Executor（执行器）**
+   - 负责“如何执行”：在被选定的节点上启动并管理具体工作负载
+   - 标准接口：Init / Execute / Stop / GetStatus / GetLogs
+   - 服务型扩展：`ServiceExecutor` 提供 `GetEndpoint` 与 `HealthCheck`
+   - 现有实现：ProcessExecutor、ContainerExecutor、YOLOInferenceExecutor、OpenCVInferenceExecutor、DataExecutor、DataGatewayExecutor
+
+4) **Manager（工作负载管理器）**
+   - 统一入口：接收与校验用户 Workload 请求（JSON 与 multipart/form-data）
+   - 调用 Scheduler 决策与 Register 分配；跟踪生命周期与状态
+   - 提供 RESTful API
+
+### 组件关系与工作流程（高层时序）
+
+1) 提交与校验
+- 客户端提交 Workload → Manager 校验基础字段与资源需求
+
+2) 调度与分配
+- Manager 调用 Scheduler → 基于 Register 资源视图做“选点”决策（本地/子/Peer）
+- Scheduler 向 Register 申请资源配额（成功则锁定，失败则回退/重试/委托）
+
+3) 执行与运行
+- 目标节点的相应 Executor 执行：
+  - Process/Container：启动进程或容器并管理生命周期
+  - ServiceExecutor（MLModel/DataGateway/OpenCV）：拉起独立服务进程并返回 endpoint，周期性健康检查
+- Executor 更新状态与运行信息（endpoint、PID、logs 摘要）
+
+4) 使用与观测
+- 客户端通过返回的 endpoint 访问服务型 Workload（如 /predict、/s3/…）
+- Manager 提供查询接口（workload 列表/详情、节点资源、健康）
+
+5) 停止与释放
+- 停止/删除 Workload → 目标节点 Executor 终止进程/服务
+- Register 释放资源配额并触发心跳同步
 
 ### 节点关系
 
